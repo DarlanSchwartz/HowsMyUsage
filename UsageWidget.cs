@@ -206,7 +206,7 @@ sealed class UsageWidget : Form
         int cellGap = (int)(28 * scale);
         var widths = values.Select(value => TextRenderer.MeasureText(value.Text, value.Font,
             Size.Empty, TextFormatFlags.NoPadding).Width + (int)(4 * scale)).ToArray();
-        ClientSize = new Size(2 * margin + 2 * cellGap + widths.Sum() + 3 * (icon + gap) + (int)(28 * DeviceDpi / 96f), (int)(64 * scale));
+        ClientSize = new Size(2 * margin + 2 * cellGap + widths.Sum() + 3 * (icon + gap), (int)(64 * scale));
         int x = margin;
         for (int i = 0; i < values.Length; i++)
         {
