@@ -6,7 +6,7 @@ A tiny native Windows desktop widget for your AI subscription limits.
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![MIT](https://img.shields.io/badge/license-MIT-green)
 
-![Desktop widget](docs/widget.png)
+![Desktop widget](docs/widget-weekly.png)
 
 Just icons and remaining percentages, with rounded corners and no outline. Drag anywhere; hover for details. Stays behind your apps by default, or enable **Always on top** to keep it visible. A system tray icon, with no taskbar button. Built with C# / WinForms. No Electron, Tauri, WebView or runtime Node dependency.
 
@@ -18,15 +18,15 @@ Right-click the widget or tray icon → **Widget size** → **Large**, **Medium*
 
 **Large — the original size (64 px tall at 100% Windows scaling)**
 
-![Large widget](docs/widget-large.png)
+![Large widget](docs/widget-large-aligned.png)
 
 **Medium — 80% scale (51 px tall)**
 
-![Medium widget](docs/widget-medium.png)
+![Medium widget](docs/widget-medium-aligned.png)
 
 **Small — 62.5% scale (40 px tall)**
 
-![Small widget](docs/widget-small.png)
+![Small widget](docs/widget-small-aligned.png)
 
 These are actual application renders at the same Windows display scale. Width adapts to the displayed percentages.
 
@@ -41,7 +41,7 @@ Keep your remaining usage visible while you work in another app. Right-click the
 | Provider | Required source | Display |
 | --- | --- | --- |
 | Codex | Installed, signed-in Codex CLI/app-server | Lowest remaining account quota |
-| Gemini | Running, signed-in Antigravity | Lowest remaining Gemini model quota |
+| Gemini | Running, signed-in Antigravity | Gemini shared weekly quota |
 | Claude | Signed-in Claude Desktop | Weekly all-model quota remaining |
 
 Percentages mean **remaining**, not consumed. Checked every two minutes. OpenCode, Go, Zen and OpenRouter are not currently supported.
@@ -54,9 +54,11 @@ Hover Codex to see the remaining quota, reset time and last check.
 
 ### Gemini / Antigravity
 
-![Gemini usage tooltip](docs/tooltip-gemini.png)
+![Gemini usage tooltip](docs/tooltip-antigravity-weekly.png)
 
-Hover Gemini to see Antigravity model limits. Models with identical limits are grouped for readability.
+The Gemini icon shows **Gemini weekly remaining**, not the five-hour window. Hover it to see both Antigravity pools: Gemini and Claude/GPT, each with weekly and five-hour limits. These pools are separate; Claude models inside Antigravity do not consume the Claude Desktop subscription shown by the separate Claude icon.
+
+Weekly readings come from Antigravity's quota-summary endpoint. If weekly data is unavailable, the indicator shows a dash rather than substituting session usage.
 
 ### Claude Desktop
 
@@ -90,7 +92,7 @@ Startup uses the current user's **UsageWidget** Run registry entry and a hidden 
 
 ## Install
 
-1. Download **HowsMyUsage-1.0.2-win-x64.zip** from [Releases](https://github.com/DarlanSchwartz/HowsMyUsage/releases/latest).
+1. Download **HowsMyUsage-1.0.3-win-x64.zip** from [Releases](https://github.com/DarlanSchwartz/HowsMyUsage/releases/latest).
 2. Extract the entire ZIP to a writable folder on a drive other than C:.
 3. Double-click **Install.cmd** and enter a destination such as **D:\Apps\HowsMyUsage**.
 4. The installer copies the application and opens it. No administrator access or separate .NET installation required.
@@ -111,7 +113,7 @@ The installer is unsigned; Windows may show its standard download warning. Downl
 
 **Codex:** sign in to Codex. The executable must be on PATH or in the supported OpenAI/Codex local installation folder. Existing CODEX_HOME is respected.
 
-**Gemini:** open Antigravity and sign in. The widget reads the local language server's status.
+**Gemini / Antigravity:** open Antigravity and sign in. The widget reads the local language server's RetrieveUserQuotaSummary endpoint. Older versions without weekly summary support must be updated. The Gemini indicator uses only Gemini's weekly pool; the tooltip also includes the independent Claude/GPT pool and both five-hour windows.
 
 **Claude:** the widget attempts to read Desktop's existing session in read-only mode and query usage. Desktop may lock its cookie database; unsupported cookie encryption can also prevent connection. If convenient, fully exit Claude Desktop, refresh the widget, then reopen Claude. Otherwise the widget may use a cached weekly reading from local history. The tooltip identifies cached readings and their original time. **Last checked is the query time, not proof that cached data is fresh.** Live Claude retrieval has not been validated on every Desktop version.
 
@@ -148,7 +150,7 @@ Start-Process .\dist\widget\Usage.exe -ArgumentList '--check' -Wait
 # Exit the running widget first; render previews and verify desktop hosting:
 Start-Process .\dist\widget\Usage.exe -ArgumentList '--check-widget' -Wait
 # Package ZIP and SHA-256 checksum:
-.\package.ps1 -Version 1.0.2
+.\package.ps1 -Version 1.0.3
 ~~~
 
 Checks write to artifacts. Source unavailability is separate from parser checks. Packaging uses the publish manifest, excludes debug symbols and does not package local settings, credentials, caches or diagnostics.
