@@ -12,6 +12,24 @@ Just icons and remaining percentages, with rounded corners and no outline. Drag 
 
 ## See it in action
 
+### Three widget sizes
+
+Right-click the widget or tray icon → **Widget size** → **Large**, **Medium**, or **Small**. Icons, text and spacing scale together, and the choice is saved across restarts. Tooltips stay readable at their normal size.
+
+**Large — the original size (64 px tall at 100% Windows scaling)**
+
+![Large widget](docs/widget-large.png)
+
+**Medium — 80% scale (51 px tall)**
+
+![Medium widget](docs/widget-medium.png)
+
+**Small — 62.5% scale (40 px tall)**
+
+![Small widget](docs/widget-small.png)
+
+These are actual application renders at the same Windows display scale. Width adapts to the displayed percentages.
+
 ### Always on top
 
 ![HowsMyUsage floating above another application](docs/always-on-top.png)
@@ -48,9 +66,9 @@ Claude shows the weekly all-model allowance. This example is a cached reading; t
 
 ### Context menu
 
-![Widget and tray context menu](docs/context-menu.png)
+![Widget and tray context menu](docs/context-menu-sizes.png)
 
-Refresh immediately, switch Always on top, start with Windows, or exit—all from the same right-click menu.
+Refresh immediately, choose Widget size, switch Always on top, start with Windows, or exit—all from the same right-click menu.
 
 ### Windows system tray
 
@@ -65,14 +83,14 @@ Screenshots include application-rendered previews and actual Windows captures. V
 - Drag anywhere to move.
 - Hover an icon or percentage for limits, reset times and last check time.
 - Left-click the tray icon to show or hide.
-- Right-click for Refresh, Always on top, Start with Windows, and Exit.
+- Right-click for Refresh, Widget size, Always on top, Start with Windows, and Exit.
 - **Always on top** is saved across restarts. Turn it off to return to desktop-only mode.
 
 Startup uses the current user's **UsageWidget** Run registry entry and a hidden PowerShell launcher. It waits 15 seconds for the desktop, retries failed starts and writes **startup.log** beside the app. Keep the installation drive available at sign-in. No service or scheduled task is installed.
 
 ## Install
 
-1. Download **HowsMyUsage-1.0.1-win-x64.zip** from [Releases](https://github.com/DarlanSchwartz/HowsMyUsage/releases/latest).
+1. Download **HowsMyUsage-1.0.2-win-x64.zip** from [Releases](https://github.com/DarlanSchwartz/HowsMyUsage/releases/latest).
 2. Extract the entire ZIP to a writable folder on a drive other than C:.
 3. Double-click **Install.cmd** and enter a destination such as **D:\Apps\HowsMyUsage**.
 4. The installer copies the application and opens it. No administrator access or separate .NET installation required.
@@ -130,7 +148,7 @@ Start-Process .\dist\widget\Usage.exe -ArgumentList '--check' -Wait
 # Exit the running widget first; render previews and verify desktop hosting:
 Start-Process .\dist\widget\Usage.exe -ArgumentList '--check-widget' -Wait
 # Package ZIP and SHA-256 checksum:
-.\package.ps1 -Version 1.0.1
+.\package.ps1 -Version 1.0.2
 ~~~
 
 Checks write to artifacts. Source unavailability is separate from parser checks. Packaging uses the publish manifest, excludes debug symbols and does not package local settings, credentials, caches or diagnostics.

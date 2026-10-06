@@ -45,6 +45,21 @@ sealed class UsageWidget : Form
             SavePosition();
         };
         menu.Items.Add(alwaysOnTop);
+        var sizeMenu = new ToolStripMenuItem("Widget size");
+        if (settings.Size is not ("Large" or "Medium" or "Small")) settings.Size = "Large";
+        foreach (string size in new[] { "Large", "Medium", "Small" })
+        {
+            var item = new ToolStripMenuItem(size) { Checked = settings.Size == size };
+            item.Click += (_, _) =>
+            {
+                settings.Size = size;
+                foreach (ToolStripMenuItem option in sizeMenu.DropDownItems) option.Checked = option.Text == size;
+                LayoutReadings();
+                SavePosition();
+            };
+            sizeMenu.DropDownItems.Add(item);
+        }
+        menu.Items.Add(sizeMenu);
         var startup = new ToolStripMenuItem("Start with Windows") { Checked = StartupEnabled(), CheckOnClick = true };
         startup.CheckedChanged += (_, _) =>
         {
@@ -98,6 +113,21 @@ sealed class UsageWidget : Form
                 using var preview = new Bitmap(ClientSize.Width, ClientSize.Height);
                 DrawToBitmap(preview, ClientRectangle);
                 preview.Save("artifacts/widget-preview.png");
+                var originalSize = settings.Size;
+                var sizeChecks = new List<object>();
+                foreach (string size in new[] { "Large", "Medium", "Small" })
+                {
+                    settings.Size = size;
+                    LayoutReadings();
+                    using var sizePreview = new Bitmap(ClientSize.Width, ClientSize.Height);
+                    DrawToBitmap(sizePreview, ClientRectangle);
+                    sizePreview.Save($"artifacts/widget-{size.ToLowerInvariant()}.png");
+                    sizeChecks.Add(new { size, width = Width, height = Height,
+                        fits = values.All(value => TextRenderer.MeasureText(value.Text, value.Font, Size.Empty,
+                            TextFormatFlags.NoPadding).Width <= value.Width) });
+                }
+                settings.Size = originalSize;
+                LayoutReadings();
                 tips.SavePreview(values[1], "artifacts/tooltip-preview.png");
                 for (int i = 0; i < names.Length; i++)
                     tips.SavePreview(values[i], $"artifacts/tooltip-{names[i].ToLowerInvariant()}.png");
@@ -120,7 +150,7 @@ sealed class UsageWidget : Form
                 ApplyWindowMode();
                 File.WriteAllText("artifacts/widget-check.json", System.Text.Json.JsonSerializer.Serialize(new
                 {
-                    topModePassed, desktopModePassed, desktopAttached = desktop.IsAttached(this), topMost = TopMost, showInTaskbar = ShowInTaskbar,
+                    sizeChecks, selectedSize = settings.Size, topModePassed, desktopModePassed, desktopAttached = desktop.IsAttached(this), topMost = TopMost, showInTaskbar = ShowInTaskbar,
                     logos = logos.Count, position = PointToScreen(Point.Empty), roundedCorners = Region != null && !Region.IsVisible(0, 0) && Region.IsVisible(Width / 2, Height / 2)
                 }));
                 Close();
@@ -131,7 +161,15 @@ sealed class UsageWidget : Form
     void LayoutReadings()
     {
         if (values.Any(value => value == null)) return;
-        float scale = DeviceDpi / 96f;
+        float factor = settings.Size switch { "Medium" => 0.8f, "Small" => 0.625f, _ => 1f };
+        float scale = DeviceDpi / 96f * factor;
+        foreach (var value in values)
+        {
+            if (Math.Abs(value.Font.SizeInPoints - 24 * factor) < 0.01f) continue;
+            var previous = value.Font;
+            value.Font = new Font("Segoe UI", 24 * factor, FontStyle.Bold);
+            previous.Dispose();
+        }
         int icon = (int)(28 * scale), gap = (int)(8 * scale), margin = (int)(18 * scale);
         int cellGap = (int)(28 * scale);
         var widths = values.Select(value => TextRenderer.MeasureText(value.Text, value.Font,
