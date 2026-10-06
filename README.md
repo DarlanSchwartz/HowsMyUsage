@@ -59,7 +59,7 @@ Percentages mean **remaining**, not consumed. Checked every two minutes. OpenCod
 
 ![Actual Windows notification area with HowsMyUsage](docs/tray.png)
 
-HowsMyUsage is the dark gauge icon at the left of this tray screenshot. Left-click to show or hide the widget; right-click for the same context menu. Windows may place it in the hidden-icons area depending on your tray preferences.
+HowsMyUsage is the dark gauge icon just to the right of the hidden-icons arrow. Left-click to show or hide the widget; right-click for the same context menu. Windows may place it in the hidden-icons area depending on your tray preferences.
 
 Screenshots are rendered from the application; values are snapshots, not live repository data.
 
