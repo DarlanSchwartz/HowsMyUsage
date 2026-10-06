@@ -1,0 +1,22 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const { Resvg } = require('@resvg/resvg-js');
+const folder = path.join(__dirname, '..', 'assets');
+const source = fs.readFileSync(path.join(folder, 'usage.svg'));
+const sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256];
+const images = sizes.map(size => new Resvg(source, { fitTo: { mode: 'width', value: size } }).render().asPng());
+const header = Buffer.alloc(6 + 16 * sizes.length);
+header.writeUInt16LE(1, 2);
+header.writeUInt16LE(sizes.length, 4);
+let offset = header.length;
+sizes.forEach((size, index) => {
+  const entry = 6 + index * 16;
+  header[entry] = header[entry + 1] = size % 256;
+  header.writeUInt16LE(1, entry + 4);
+  header.writeUInt16LE(32, entry + 6);
+  header.writeUInt32LE(images[index].length, entry + 8);
+  header.writeUInt32LE(offset, entry + 12);
+  offset += images[index].length;
+});
+fs.writeFileSync(path.join(folder, 'usage.ico'), Buffer.concat([header, ...images]));
+fs.writeFileSync(path.join(folder, 'usage.png'), images.at(-1));

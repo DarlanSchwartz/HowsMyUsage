@@ -1,0 +1,17 @@
+bin/
+obj/
+dist/
+tools/node_modules/
+artifacts/
+.build/
+widget-settings.json
+temp/
+
+startup.log
+*.user
+*.suo
+.env
+.env.*
+auth.json
+*.pfx
+*.key
