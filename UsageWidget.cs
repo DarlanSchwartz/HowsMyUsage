@@ -226,7 +226,7 @@ sealed class UsageWidget : Form
             : "Pin position. Prevents moving the widget when you drag it.";
         pin.AccessibleName = message;
         pin.Locked = settings.PositionLocked;
-        tips.SetText(pin, settings.PositionLocked ? "Position locked" : "Pin position", message, "Click to toggle � Saved across restarts");
+        tips.SetText(pin, settings.PositionLocked ? "Position locked" : "Pin position", message, "Click to toggle - Saved across restarts");
         pin.Invalidate();
     }
 
@@ -445,5 +445,3 @@ sealed class PinButton : Button
         e.Graphics.DrawLine(pen, 12, 13, 12, 20);
     }
 }
-
-
