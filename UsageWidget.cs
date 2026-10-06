@@ -268,8 +268,8 @@ sealed class UsageWidget : Form
             values[i].Text = result.Remaining is double p ? $"{Math.Floor(p):0}%" : "—";
             values[i].ForeColor = result.Error != null ? Color.Silver : result.Remaining <= 10 ? Color.Salmon : Color.WhiteSmoke;
             var name = new[] { "Codex", "Gemini", "Claude" }[i];
-            tips.Set(values[i], name, result, DateTimeOffset.Now);
-            tips.Set(pictures[i], name, result, DateTimeOffset.Now);
+            tips.Set(values[i], i == 1 ? "Antigravity" : name, result, DateTimeOffset.Now);
+            tips.Set(pictures[i], i == 1 ? "Antigravity" : name, result, DateTimeOffset.Now);
             LayoutReadings();
             values[i].AccessibleName = $"{new[] { "Codex", "Gemini", "Claude" }[i]}: {values[i].Text} remaining";
         }
@@ -318,7 +318,53 @@ sealed class UsageWidget : Form
 
 sealed class PercentageLabel : Label
 {
-    protected override void OnPaint(PaintEventArgs e) => TextRenderer.DrawText(e.Graphics, Text, Font,
-        ClientRectangle, ForeColor, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine |
-        TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter);
+    Bitmap? renderedText;
+    Rectangle ink;
+    int renderedDpi;
+
+    void ClearText()
+    {
+        renderedText?.Dispose();
+        renderedText = null;
+        Invalidate();
+    }
+
+    protected override void OnTextChanged(EventArgs e) { ClearText(); base.OnTextChanged(e); }
+    protected override void OnFontChanged(EventArgs e) { ClearText(); base.OnFontChanged(e); }
+    protected override void OnForeColorChanged(EventArgs e) { ClearText(); base.OnForeColorChanged(e); }
+    protected override void OnBackColorChanged(EventArgs e) { ClearText(); base.OnBackColorChanged(e); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        if (renderedDpi != DeviceDpi) ClearText();
+        if (renderedText == null)
+        {
+            var size = TextRenderer.MeasureText(Text, Font, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+            renderedText = new Bitmap(Math.Max(1, size.Width + 4), Math.Max(1, size.Height * 2));
+            renderedText.SetResolution(DeviceDpi, DeviceDpi);
+            using (var graphics = Graphics.FromImage(renderedText))
+            {
+                graphics.Clear(BackColor);
+                TextRenderer.DrawText(graphics, Text, Font, new Point(2, 0), ForeColor, BackColor,
+                    TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+            }
+            int top = renderedText.Height, bottom = -1;
+            for (int y = 0; y < renderedText.Height; y++)
+                for (int x = 0; x < renderedText.Width; x++)
+                    if (renderedText.GetPixel(x, y).ToArgb() != BackColor.ToArgb())
+                    { top = Math.Min(top, y); bottom = y; break; }
+            ink = bottom >= top ? new Rectangle(0, top, renderedText.Width, bottom - top + 1) : Rectangle.Empty;
+            renderedDpi = DeviceDpi;
+        }
+        if (!ink.IsEmpty)
+            e.Graphics.DrawImage(renderedText,
+                new Rectangle((Width - ink.Width) / 2, (Height - ink.Height) / 2, ink.Width, ink.Height),
+                ink, GraphicsUnit.Pixel);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) renderedText?.Dispose();
+        base.Dispose(disposing);
+    }
 }

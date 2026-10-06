@@ -28,9 +28,24 @@ static class Program
     {
         using var codex = JsonDocument.Parse("{\"rateLimits\":{\"primary\":{\"usedPercent\":25,\"windowDurationMins\":300},\"secondary\":{\"usedPercent\":100}}}");
         if (Providers.ParseCodex(codex.RootElement).Remaining != 0) throw new Exception("Codex parser failed");
-        using var gemini = JsonDocument.Parse("{\"userStatus\":{\"clientModelConfigs\":[{\"label\":\"Gemini Pro\",\"quotaInfo\":{\"remainingFraction\":0.42}},{\"label\":\"Gemini Flash\",\"quotaInfo\":{}},{\"label\":\"Claude\",\"quotaInfo\":{\"remainingFraction\":0}}]}}");
+        using var gemini = JsonDocument.Parse("""
+            {"response":{"groups":[{"buckets":[
+                {"bucketId":"gemini-weekly","window":"weekly","remainingFraction":0.97},
+                {"bucketId":"gemini-5h","window":"5h","remainingFraction":1},
+                {"bucketId":"3p-weekly","window":"weekly","remainingFraction":0.39},
+                {"bucketId":"3p-5h","window":"5h","remainingFraction":1},
+                {"bucketId":"gemini-weekly","window":"weekly","remainingFraction":null}
+            ]}]}}
+            """);
         var parsed = Providers.ParseAntigravity(gemini.RootElement);
-        if (parsed.Quotas.Count != 1 || parsed.Remaining != 42) throw new Exception("Antigravity parser failed");
+        if (parsed.Quotas.Count != 4 || parsed.Remaining != 97 ||
+            !parsed.Quotas.Any(q => q.Name == "Claude / GPT · Weekly" && q.Remaining == 39))
+            throw new Exception("Antigravity must select Gemini weekly and retain both pools for details");
+        using var sessionQuota = JsonDocument.Parse("""
+            {"response":{"groups":[{"buckets":[{"bucketId":"gemini-5h","window":"5h","remainingFraction":1}]}]}}
+            """);
+        if (Providers.ParseAntigravity(sessionQuota.RootElement).Remaining != null)
+            throw new Exception("Antigravity session must not replace a missing weekly quota");
         using var claudeFixture = JsonDocument.Parse("{\"five_hour\":{\"utilization\":20},\"seven_day\":{\"utilization\":65},\"extra_usage\":{\"utilization\":99}}");
         var claudeParsed = ClaudeUsageService.Parse(claudeFixture.RootElement);
         if (claudeParsed.Quotas.Count != 1 || claudeParsed.Remaining != 35) throw new Exception("Claude must show only the weekly quota");

@@ -5,10 +5,10 @@ using System.Text.RegularExpressions;
 
 namespace Usage;
 
-record Quota(string Name, double Remaining, DateTimeOffset? Reset);
+record Quota(string Name, double Remaining, DateTimeOffset? Reset, bool IncludeInSummary = true);
 record Snapshot(List<Quota> Quotas, string? Error = null, DateTimeOffset? MeasuredAt = null)
 {
-    public double? Remaining => Quotas.Count == 0 ? null : Quotas.Min(q => q.Remaining);
+    public double? Remaining => Quotas.Where(q => q.IncludeInSummary).Select(q => (double?)q.Remaining).Min();
 }
 
 static class Providers
@@ -105,38 +105,52 @@ static class Providers
                 client.DefaultRequestHeaders.Add("Connect-Protocol-Version", "1");
                 try
                 {
-                    using var response = await client.PostAsJsonAsync($"{scheme}://127.0.0.1:{port.GetInt32()}/exa.language_server_pb.LanguageServerService/GetUserStatus",
+                    using var response = await client.PostAsJsonAsync($"{scheme}://127.0.0.1:{port.GetInt32()}/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary",
                         new { metadata = new { ideName = "antigravity", extensionName = "antigravity", locale = "pt-BR" } }, token);
                     if (!response.IsSuccessStatusCode) continue;
                     using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
                     var snapshot = ParseAntigravity(body.RootElement);
-                    if (snapshot.Quotas.Count > 0) return snapshot;
+                    if (snapshot.Quotas.Count > 0 || snapshot.Error != null) return snapshot;
                 }
                 catch (Exception e) when (e is HttpRequestException or JsonException or TaskCanceledException) { token.ThrowIfCancellationRequested(); }
             }
         }
-        return new([], "No Gemini limits available. Open an Antigravity conversation and refresh.");
+        return new([], "Weekly Antigravity limits unavailable. Open or update Antigravity and refresh.");
     }
 
     public static Snapshot ParseAntigravity(JsonElement root)
     {
         List<Quota> quotas = [];
-        Walk(root);
-        return new(quotas);
-        void Walk(JsonElement node)
+        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("response", out var response))
+            root = response;
+        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("groups", out var groups) && groups.ValueKind == JsonValueKind.Array)
+        foreach (var group in groups.EnumerateArray())
         {
-            if (node.ValueKind == JsonValueKind.Array) { foreach (var item in node.EnumerateArray()) Walk(item); return; }
-            if (node.ValueKind != JsonValueKind.Object) return;
-            if (node.TryGetProperty("quotaInfo", out var quota))
+            if (group.ValueKind != JsonValueKind.Object || !group.TryGetProperty("buckets", out var buckets) || buckets.ValueKind != JsonValueKind.Array) continue;
+            foreach (var bucket in buckets.EnumerateArray())
             {
-                var label = node.TryGetProperty("label", out var l) ? l.GetString() : node.TryGetProperty("modelId", out var m) ? m.ToString() : null;
-                if (label?.Contains("gemini", StringComparison.OrdinalIgnoreCase) == true && quota.TryGetProperty("remainingFraction", out var f) && f.TryGetDouble(out var fraction) && double.IsFinite(fraction))
+                if (bucket.ValueKind != JsonValueKind.Object ||
+                    !bucket.TryGetProperty("bucketId", out var id) || id.ValueKind != JsonValueKind.String ||
+                    !bucket.TryGetProperty("window", out var window) || window.ValueKind != JsonValueKind.String ||
+                    !bucket.TryGetProperty("remainingFraction", out var value) || value.ValueKind != JsonValueKind.Number ||
+                    !value.TryGetDouble(out var fraction) || !double.IsFinite(fraction) || fraction < 0 || fraction > 1) continue;
+                string? pool = id.GetString() switch
                 {
-                    DateTimeOffset? reset = quota.TryGetProperty("resetTime", out var r) && DateTimeOffset.TryParse(r.ToString(), out var time) ? time : null;
-                    quotas.Add(new(label, Math.Clamp(fraction * 100, 0, 100), reset));
-                }
+                    "gemini-weekly" or "gemini-5h" => "Gemini",
+                    "3p-weekly" or "3p-5h" => "Claude / GPT",
+                    _ => null
+                };
+                string? period = window.GetString() switch { "weekly" => "Weekly", "5h" => "5-hour", _ => null };
+                if (pool == null || period == null) continue;
+                // Both window and bucket identity must agree; never replace weekly usage with session usage.
+                bool weekly = period == "Weekly";
+                if (id.GetString()!.EndsWith("-weekly") != weekly) continue;
+                DateTimeOffset? reset = bucket.TryGetProperty("resetTime", out var r) &&
+                    r.ValueKind == JsonValueKind.String && DateTimeOffset.TryParse(r.GetString(), out var time) ? time : null;
+                quotas.Add(new($"{pool} · {period}", fraction * 100, reset, pool == "Gemini" && weekly));
             }
-            foreach (var property in node.EnumerateObject()) Walk(property.Value);
         }
+        return new(quotas, quotas.Any(q => q.IncludeInSummary) ? null :
+            "Gemini weekly quota unavailable. Five-hour limits are not used as a substitute.");
     }
 }
