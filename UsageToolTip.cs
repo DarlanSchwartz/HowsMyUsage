@@ -42,6 +42,12 @@ sealed class UsageToolTip : IDisposable
         tip.SetToolTip(control, name + "\n" + body + "\n" + contents[control].Footer);
     }
 
+    public void SetText(Control control, string title, string body, string footer)
+    {
+        contents[control] = new(title, body, footer);
+        tip.SetToolTip(control, title + "\\n" + body + "\\n" + footer);
+    }
+
     Size Measure(Content content, int dpi)
     {
         int pad = 16 * dpi / 96, width = 350 * dpi / 96;
