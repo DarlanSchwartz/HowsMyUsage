@@ -16,6 +16,9 @@ sealed class UsageWidget : Form
     readonly NotifyIcon tray = new();
     readonly List<Image> logos = [];
     readonly DesktopHost desktop = new();
+    readonly Button pin = new() { FlatStyle = FlatStyle.Flat, TabStop = true, Visible = false, Cursor = Cursors.Hand };
+    readonly ToolTip pinTip = new();
+    readonly System.Windows.Forms.Timer hoverTimer = new() { Interval = 100 };
     bool refreshing;
     const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
@@ -95,8 +98,37 @@ sealed class UsageWidget : Form
             Controls.Add(values[i]);
             tips.Set(values[i], names[i], null, null);
         }
+        pin.FlatAppearance.BorderSize = 0;
+        pin.FlatAppearance.MouseOverBackColor = Color.FromArgb(55, 59, 65);
+        pin.Paint += (_, e) =>
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.ScaleTransform(pin.Width / 18f, pin.Height / 18f);
+            using var pen = new Pen(settings.PositionLocked ? Color.Turquoise : Color.WhiteSmoke, 1.5f);
+            float cx = 9, cy = 9;
+            e.Graphics.DrawLine(pen, cx - 3, cy - 5, cx + 3, cy - 5);
+            e.Graphics.DrawLine(pen, cx - 2, cy - 5, cx - 2, cy);
+            e.Graphics.DrawLine(pen, cx + 2, cy - 5, cx + 2, cy);
+            e.Graphics.DrawLine(pen, cx - 4, cy + 1, cx + 4, cy + 1);
+            e.Graphics.DrawLine(pen, cx, cy + 1, cx, cy + 6);
+        };
+        pin.Click += (_, _) =>
+        {
+            settings.PositionLocked = !settings.PositionLocked;
+            UpdatePin();
+            SavePosition();
+        };
+        Controls.Add(pin);
+        UpdatePin();
         LayoutReadings();
         AttachDrag(this);
+        hoverTimer.Tick += (_, _) =>
+        {
+            bool hovered = Visible && ClientRectangle.Contains(PointToClient(Cursor.Position));
+            pin.Visible = hovered || pin.Focused;
+            if (pin.Visible) pin.BringToFront();
+        };
+        hoverTimer.Start();
         timer.Tick += async (_, _) => await RefreshUsage();
         Shown += async (_, _) =>
         {
@@ -138,6 +170,18 @@ sealed class UsageWidget : Form
                     menuPreview.Save("artifacts/context-menu.png");
                 }
                 menu.Close();
+                bool originalLock = settings.PositionLocked;
+                pin.Show();
+                pin.PerformClick();
+                bool pinPassed = settings.PositionLocked != originalLock && WidgetSettings.Load().PositionLocked == settings.PositionLocked;
+                pin.PerformClick();
+                pinPassed &= settings.PositionLocked == originalLock;
+                using (var pinPreview = new Bitmap(ClientSize.Width, ClientSize.Height))
+                {
+                    DrawToBitmap(pinPreview, ClientRectangle);
+                    pinPreview.Save("artifacts/widget-pin.png");
+                }
+                pin.Hide();
                 bool originalMode = settings.AlwaysOnTop;
                 var originalPosition = PointToScreen(Point.Empty);
                 settings.AlwaysOnTop = true;
@@ -150,7 +194,7 @@ sealed class UsageWidget : Form
                 ApplyWindowMode();
                 File.WriteAllText("artifacts/widget-check.json", System.Text.Json.JsonSerializer.Serialize(new
                 {
-                    sizeChecks, selectedSize = settings.Size, topModePassed, desktopModePassed, desktopAttached = desktop.IsAttached(this), topMost = TopMost, showInTaskbar = ShowInTaskbar,
+                    pinPassed, sizeChecks, selectedSize = settings.Size, topModePassed, desktopModePassed, desktopAttached = desktop.IsAttached(this), topMost = TopMost, showInTaskbar = ShowInTaskbar,
                     logos = logos.Count, position = PointToScreen(Point.Empty), roundedCorners = Region != null && !Region.IsVisible(0, 0) && Region.IsVisible(Width / 2, Height / 2)
                 }));
                 Close();
@@ -182,6 +226,19 @@ sealed class UsageWidget : Form
             values[i].Bounds = new Rectangle(x + icon + gap, 0, widths[i], ClientSize.Height);
             x += icon + gap + widths[i] + cellGap;
         }
+        int pinSize = (int)(18 * scale);
+        pin.Bounds = new Rectangle(ClientSize.Width - pinSize - 2, 1, pinSize, pinSize);
+        pin.BringToFront();
+    }
+
+    void UpdatePin()
+    {
+        string message = settings.PositionLocked
+            ? "Position locked. Click to unlock dragging."
+            : "Pin position. Prevents moving the widget when you drag it.";
+        pin.AccessibleName = message;
+        pinTip.SetToolTip(pin, message);
+        pin.Invalidate();
     }
 
     protected override void OnDpiChanged(DpiChangedEventArgs e)
@@ -240,7 +297,7 @@ sealed class UsageWidget : Form
         control.ContextMenuStrip = ContextMenuStrip;
         control.MouseDown += (_, e) =>
         {
-            if (e.Button != MouseButtons.Left) return;
+            if (e.Button != MouseButtons.Left || settings.PositionLocked) return;
             ReleaseCapture();
             SendMessage(Handle, 0xA1, (IntPtr)2, IntPtr.Zero);
             SavePosition();
@@ -295,6 +352,7 @@ sealed class UsageWidget : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         lifetime.Cancel(); timer.Stop(); timer.Dispose(); tips.Dispose(); claude.Dispose();
+        hoverTimer.Stop(); hoverTimer.Dispose(); pinTip.Dispose();
         tray.Visible = false; tray.Dispose();
         Icon?.Dispose();
         foreach (var logo in logos) logo.Dispose();

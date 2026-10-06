@@ -82,7 +82,8 @@ Screenshots include application-rendered previews and actual Windows captures. V
 
 ## Controls
 
-- Drag anywhere to move.
+- Drag anywhere to move when the position is unlocked.
+- Hover the widget to reveal the top-right pin. Click to lock its position and prevent dragging; click again to unlock. The tooltip explains the current state, and the lock persists across restarts.
 - Hover an icon or percentage for limits, reset times and last check time.
 - Left-click the tray icon to show or hide.
 - Right-click for Refresh, Widget size, Always on top, Start with Windows, and Exit.
