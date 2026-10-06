@@ -32,11 +32,11 @@ sealed class UsageToolTip : IDisposable
             var groups = snapshot.Quotas.GroupBy(q => (q.Remaining, q.Reset)).ToArray();
             body = string.Join("\n\n", groups.Select(group =>
                 $"{group.Key.Remaining:0.#}% remaining" +
-                (group.Key.Reset is { } reset ? $"  ·  Resets {reset.LocalDateTime:MMM d, HH:mm}" : "") +
+                (group.Key.Reset is { } reset ? $"  \u00b7  Resets {reset.LocalDateTime:MMM d, HH:mm}" : "") +
                 "\n" + (groups.Length == 1 && group.Count() > 3 ? $"All {group.Count()} models" : string.Join(", ", group.Select(q => q.Name)))));
             if (snapshot.Error != null)
                 body += (body.Length > 0 ? "\n\n" : "") +
-                    (snapshot.MeasuredAt is { } captured ? $"Cached reading · {captured.LocalDateTime:MMM d, HH:mm}\nLive refresh unavailable." : snapshot.Error);
+                    (snapshot.MeasuredAt is { } captured ? $"Cached reading \u00b7 {captured.LocalDateTime:MMM d, HH:mm}\nLive refresh unavailable." : snapshot.Error);
         }
         contents[control] = new(name, body, checkedAt is { } time ? $"Last checked {time.LocalDateTime:HH:mm}" : "Waiting for first check");
         tip.SetToolTip(control, name + "\n" + body + "\n" + contents[control].Footer);
@@ -44,8 +44,32 @@ sealed class UsageToolTip : IDisposable
 
     public void SetText(Control control, string title, string body, string footer)
     {
+        if (!contents.ContainsKey(control))
+        {
+            control.MouseHover += (_, _) =>
+            {
+                if (!control.Visible || !contents.TryGetValue(control, out var content)) return;
+                var size = Measure(content, control.DeviceDpi);
+                var anchor = control.PointToScreen(Point.Empty);
+                var area = Screen.FromControl(control).WorkingArea;
+                var point = TooltipPosition(anchor, control.Height, size, area);
+                tip.Show(content.Title + "\\n" + content.Body + "\\n" + content.Footer,
+                    control, control.PointToClient(point), 25000);
+            };
+            control.MouseLeave += (_, _) => tip.Hide(control);
+            control.MouseDown += (_, _) => tip.Hide(control);
+            control.VisibleChanged += (_, _) => { if (!control.Visible) tip.Hide(control); };
+        }
+        tip.Hide(control);
         contents[control] = new(title, body, footer);
-        tip.SetToolTip(control, title + "\\n" + body + "\\n" + footer);
+    }
+
+    internal static Point TooltipPosition(Point anchor, int controlHeight, Size size, Rectangle area)
+    {
+        int y = anchor.Y - size.Height - 8;
+        if (y < area.Top) y = anchor.Y + controlHeight + 8;
+        return new Point(Math.Clamp(anchor.X + 10, area.Left, Math.Max(area.Left, area.Right - size.Width)),
+            Math.Clamp(y, area.Top, Math.Max(area.Top, area.Bottom - size.Height)));
     }
 
     Size Measure(Content content, int dpi)

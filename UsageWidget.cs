@@ -19,6 +19,7 @@ sealed class UsageWidget : Form
     readonly PinButton pin = new() { FlatStyle = FlatStyle.Flat, TabStop = true, Visible = false, Cursor = Cursors.Hand };
     readonly System.Windows.Forms.Timer hoverTimer = new() { Interval = 100 };
     bool refreshing;
+    bool moving;
     const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
     public UsageWidget()
@@ -76,7 +77,7 @@ sealed class UsageWidget : Form
         using (var stream = typeof(UsageWidget).Assembly.GetManifestResourceStream("Usage.assets.usage.ico")!)
         using (var source = new Icon(stream)) Icon = (Icon)source.Clone();
         tray.Icon = Icon;
-        tray.Text = "Usage · Codex, Gemini and Claude";
+        tray.Text = "Usage \u00b7 Codex, Gemini and Claude";
         tray.ContextMenuStrip = menu;
         tray.Visible = true;
         tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ToggleWidget(); };
@@ -106,6 +107,7 @@ sealed class UsageWidget : Form
             SavePosition();
         };
         Controls.Add(pin);
+        pin.VisibleChanged += (_, _) => UpdateShape();
         UpdatePin();
         LayoutReadings();
         AttachDrag(this);
@@ -121,8 +123,7 @@ sealed class UsageWidget : Form
         {
             var area = Screen.PrimaryScreen!.WorkingArea;
             Location = settings.X is int x && settings.Y is int y ? new Point(x, y) : new Point(area.Right - Width - 24, area.Bottom - Height - 24);
-            var screen = Screen.FromRectangle(Bounds).WorkingArea;
-            Location = new Point(Math.Clamp(Left, screen.Left, Math.Max(screen.Left, screen.Right - Width)), Math.Clamp(Top, screen.Top, Math.Max(screen.Top, screen.Bottom - Height)));
+            Location = ConstrainPosition(Bounds);
             ApplyWindowMode();
             timer.Start();
             await RefreshUsage();
@@ -166,6 +167,9 @@ sealed class UsageWidget : Form
                 using (var pinPreview = new Bitmap(ClientSize.Width, ClientSize.Height))
                 {
                     DrawToBitmap(pinPreview, ClientRectangle);
+                    for (int py = 0; py < pinPreview.Height; py++)
+                        for (int px = 0; px < pinPreview.Width; px++)
+                            if (Region?.IsVisible(px, py) == false) pinPreview.SetPixel(px, py, Color.Transparent);
                     pinPreview.Save("artifacts/widget-pin.png");
                 }
                 tips.SavePreview(pin, "artifacts/pin-tooltip.png");
@@ -180,9 +184,41 @@ sealed class UsageWidget : Form
                 bool desktopModePassed = !TopMost && desktop.IsAttached(this) && PointToScreen(Point.Empty) == originalPosition;
                 settings.AlwaysOnTop = originalMode;
                 ApplyWindowMode();
+                bool workAreaPassed = Screen.AllScreens.All(screen =>
+                {
+                    var area = screen.WorkingArea;
+                    var proposed = new Rectangle(area.Right - 1, area.Bottom - 1, Width, Height);
+                    var corrected = ConstrainPosition(proposed);
+                    return Screen.FromRectangle(proposed).WorkingArea.Contains(new Rectangle(corrected, Size));
+                });
                 File.WriteAllText("artifacts/widget-check.json", System.Text.Json.JsonSerializer.Serialize(new
                 {
-                    pinPassed, sizeChecks, selectedSize = settings.Size, topModePassed, desktopModePassed, desktopAttached = desktop.IsAttached(this), topMost = TopMost, showInTaskbar = ShowInTaskbar,
+                    pinTooltipBoundsPassed = Screen.AllScreens.All(screen =>
+                    {
+                        var area = screen.WorkingArea;
+                        var tipSize = new Size(350, 150);
+                        return new[] { area.Location, new Point(area.Right - 1, area.Bottom - 1),
+                            new Point(area.Left, area.Bottom - 1), new Point(area.Right - 1, area.Top) }
+                            .All(anchor => area.Contains(new Rectangle(UsageToolTip.TooltipPosition(anchor, 20, tipSize, area), tipSize)));
+                    }),
+                    topEdgePassed = Screen.AllScreens.All(screen =>
+                    {
+                        var area = screen.WorkingArea;
+                        var point = ConstrainPosition(new Rectangle(area.Left, area.Top - 100, Width, Height), area.Location);
+                        return VisibleBounds(point).Top == area.Top;
+                    }),
+                    crossMonitorDragPassed = Screen.AllScreens.All(destination =>
+                    {
+                        var area = destination.WorkingArea;
+                        var pointer = new Point(area.Left + area.Width / 2, area.Top + area.Height / 2);
+                        return Screen.AllScreens.All(source =>
+                        {
+                            var bounds = new Rectangle(source.WorkingArea.Location, Size);
+                            var corrected = ConstrainPosition(bounds, pointer);
+                            return area.Contains(VisibleBounds(corrected));
+                        });
+                    }),
+                    workAreaPassed, pinPassed, sizeChecks, selectedSize = settings.Size, topModePassed, desktopModePassed, desktopAttached = desktop.IsAttached(this), topMost = TopMost, showInTaskbar = ShowInTaskbar,
                     logos = logos.Count, position = PointToScreen(Point.Empty), roundedCorners = Region != null && !Region.IsVisible(0, 0) && Region.IsVisible(Width / 2, Height / 2)
                 }));
                 Close();
@@ -206,17 +242,22 @@ sealed class UsageWidget : Form
         int cellGap = (int)(28 * scale);
         var widths = values.Select(value => TextRenderer.MeasureText(value.Text, value.Font,
             Size.Empty, TextFormatFlags.NoPadding).Width + (int)(4 * scale)).ToArray();
-        ClientSize = new Size(2 * margin + 2 * cellGap + widths.Sum() + 3 * (icon + gap), (int)(64 * scale));
+        int top = (int)(18 * DeviceDpi / 96f), right = (int)(10 * DeviceDpi / 96f);
+        int bodyHeight = (int)(64 * scale);
+        ClientSize = new Size(2 * margin + 2 * cellGap + widths.Sum() + 3 * (icon + gap) + right, bodyHeight + top);
         int x = margin;
         for (int i = 0; i < values.Length; i++)
         {
-            pictures[i].Bounds = new Rectangle(x, (ClientSize.Height - icon) / 2, icon, icon);
-            values[i].Bounds = new Rectangle(x + icon + gap, 0, widths[i], ClientSize.Height);
+            pictures[i].Bounds = new Rectangle(x, top + (bodyHeight - icon) / 2, icon, icon);
+            values[i].Bounds = new Rectangle(x + icon + gap, top, widths[i], bodyHeight);
             x += icon + gap + widths[i] + cellGap;
         }
-        int pinSize = (int)(24 * DeviceDpi / 96f);
-        pin.Bounds = new Rectangle(ClientSize.Width - pinSize - (int)(4 * DeviceDpi / 96f), (int)(4 * DeviceDpi / 96f), pinSize, pinSize);
+        int pinSize = (int)(20 * DeviceDpi / 96f);
+        pin.Bounds = new Rectangle(ClientSize.Width - pinSize, 0, pinSize, pinSize);
+        PlacePin();
         pin.BringToFront();
+        UpdateShape();
+        if (IsHandleCreated && Visible) KeepOnDesktop();
     }
 
     void UpdatePin()
@@ -238,11 +279,13 @@ sealed class UsageWidget : Form
 
     GraphicsPath RoundedOutline(float inset = 0)
     {
+        float top = 18f * DeviceDpi / 96f;
+        float rightInset = 10f * DeviceDpi / 96f;
         float diameter = Math.Min(28f * DeviceDpi / 96f, Math.Min(ClientSize.Width, ClientSize.Height) - 2 * inset);
-        float right = ClientSize.Width - inset, bottom = ClientSize.Height - inset;
+        float right = ClientSize.Width - rightInset - inset, bottom = ClientSize.Height - inset;
         var path = new GraphicsPath();
-        path.AddArc(inset, inset, diameter, diameter, 180, 90);
-        path.AddArc(right - diameter, inset, diameter, diameter, 270, 90);
+        path.AddArc(inset, top + inset, diameter, diameter, 180, 90);
+        path.AddArc(right - diameter, top + inset, diameter, diameter, 270, 90);
         path.AddArc(right - diameter, bottom - diameter, diameter, diameter, 0, 90);
         path.AddArc(inset, bottom - diameter, diameter, diameter, 90, 90);
         path.CloseFigure();
@@ -252,10 +295,17 @@ sealed class UsageWidget : Form
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
+        UpdateShape();
+    }
+
+    void UpdateShape()
+    {
         if (ClientSize.Width <= 0 || ClientSize.Height <= 0) return;
         using var outline = RoundedOutline();
         var previous = Region;
-        Region = new Region(outline);
+        var shape = new Region(outline);
+        if (pin != null && pin.Visible) shape.Union(pin.Bounds);
+        Region = shape;
         previous?.Dispose();
         Invalidate();
     }
@@ -283,6 +333,7 @@ sealed class UsageWidget : Form
             TopMost = false;
             desktop.Attach(this);
         }
+        KeepOnDesktop();
     }
 
     void ToggleWidget()
@@ -361,6 +412,7 @@ sealed class UsageWidget : Form
     }
     void SavePosition()
     {
+        KeepOnDesktop();
         var point = PointToScreen(Point.Empty);
         settings.X = point.X; settings.Y = point.Y; settings.Save();
     }
@@ -370,6 +422,64 @@ sealed class UsageWidget : Form
         base.OnFormClosing(e);
     }
     protected override bool ShowWithoutActivation => true;
+    Rectangle VisibleBounds(Point position) => new(position.X, position.Y + (int)(18 * DeviceDpi / 96f),
+        Width - (int)(10 * DeviceDpi / 96f), Height - (int)(18 * DeviceDpi / 96f));
+
+    void PlacePin()
+    {
+        if (!IsHandleCreated || pin == null) return;
+        var origin = PointToScreen(Point.Empty);
+        var area = Screen.FromRectangle(VisibleBounds(origin)).WorkingArea;
+        pin.Top = Math.Max(0, area.Top - origin.Y);
+    }
+
+    protected override void OnLocationChanged(EventArgs e)
+    {
+        base.OnLocationChanged(e);
+        PlacePin();
+        if (pin != null) UpdateShape();
+    }
+
+    Point ConstrainPosition(Rectangle bounds, Point? pointer = null)
+    {
+        // During dragging, the cursor chooses the destination monitor. Using the
+        // widget's largest overlap here traps it at the old monitor's edge.
+        var area = (pointer is { } position ? Screen.FromPoint(position) : Screen.FromRectangle(bounds)).WorkingArea;
+        return new Point(Math.Clamp(bounds.X, area.Left, Math.Max(area.Left, area.Right - bounds.Width)),
+            Math.Clamp(bounds.Y, area.Top - (int)(18 * DeviceDpi / 96f), Math.Max(area.Top, area.Bottom - bounds.Height)));
+    }
+
+    void KeepOnDesktop()
+    {
+        if (!IsHandleCreated) return;
+        var current = PointToScreen(Point.Empty);
+        var target = ConstrainPosition(new Rectangle(current, Size), moving ? Cursor.Position : null);
+        // Location may be relative to Explorer when hosted as a desktop child.
+        if (current != target) Location = new Point(Left + target.X - current.X, Top + target.Y - current.Y);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct WindowRect { public int Left, Top, Right, Bottom; }
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == 0x0231) moving = true; // WM_ENTERSIZEMOVE
+        if (m.Msg == 0x0232) moving = false; // WM_EXITSIZEMOVE
+        const int Moving = 0x0216;
+        if (m.Msg == Moving)
+        {
+            var rect = Marshal.PtrToStructure<WindowRect>(m.LParam);
+            var bounds = Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom);
+            var point = ConstrainPosition(bounds, Cursor.Position);
+            rect.Left = point.X; rect.Top = point.Y;
+            rect.Right = point.X + bounds.Width; rect.Bottom = point.Y + bounds.Height;
+            Marshal.StructureToPtr(rect, m.LParam, false);
+            m.Result = new IntPtr(1);
+            return;
+        }
+        base.WndProc(ref m);
+    }
+
     [DllImport("user32.dll")] static extern bool ReleaseCapture();
     [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 }

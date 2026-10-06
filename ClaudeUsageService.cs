@@ -86,11 +86,11 @@ sealed class ClaudeUsageService : IDisposable
             {
                 if (item.ValueKind != JsonValueKind.Object) continue;
                 var name = item.TryGetProperty("kind", out var kind) ? kind.GetString() ?? "Limit" : "Limit";
-                if (name == "weekly_all") Add(item, "percent", "Weekly · all models");
+                if (name == "weekly_all") Add(item, "percent", "Weekly \u00b7 all models");
             }
         }
         if (quotas.Count == 0 && root.TryGetProperty("seven_day", out var window) && window.ValueKind == JsonValueKind.Object)
-            Add(window, "utilization", "Weekly · all models");
+            Add(window, "utilization", "Weekly \u00b7 all models");
         return new(quotas, quotas.Count == 0 ? "Claude did not return the weekly limit." : null, DateTimeOffset.UtcNow);
 
         void Add(JsonElement window, string key, string name)
@@ -112,7 +112,7 @@ sealed class ClaudeUsageService : IDisposable
         if (latest is not { } item || !item.TryGetProperty("u", out var usage) || usage.ValueKind != JsonValueKind.Object) return new([], error);
         List<Quota> quotas = [];
         if (usage.TryGetProperty("sd", out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var percent) && double.IsFinite(percent) && percent >= 0 && percent <= 100)
-            quotas.Add(new("Weekly · all models", 100 - percent, null));
+            quotas.Add(new("Weekly \u00b7 all models", 100 - percent, null));
         DateTimeOffset? measured = null;
         try { measured = DateTimeOffset.FromUnixTimeMilliseconds(stamp); } catch (ArgumentOutOfRangeException) { }
         return new(quotas, error, measured);

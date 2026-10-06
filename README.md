@@ -36,6 +36,16 @@ These are actual application renders at the same Windows display scale. Width ad
 
 Keep your remaining usage visible while you work in another app. Right-click the widget or tray icon and enable **Always on top**. The choice is saved across restarts; turn it off to return the widget to the desktop behind your apps.
 
+### Pin the position
+
+![Hover pin outside the widget's top-right corner](docs/widget-pin-external.png)
+
+Hover the widget to reveal the pin outside its top-right corner. Click it to prevent dragging; click again to unlock. The position lock is saved across restarts and is independent of **Always on top**. The widget stays inside the usable desktop area so the taskbar cannot cover it.
+
+![Dark pin tooltip explaining the position lock](docs/pin-tooltip.png)
+
+The tooltip explains the current lock state and stays within the screen's usable area, including near the taskbar.
+
 ### Usage at a glance
 
 | Provider | Required source | Display |
@@ -48,7 +58,7 @@ Percentages mean **remaining**, not consumed. Checked every two minutes. OpenCod
 
 ### Codex
 
-![Codex usage tooltip](docs/tooltip-codex.png)
+![Codex usage tooltip](docs/tooltip-codex-fixed.png)
 
 Hover Codex to see the remaining quota, reset time and last check.
 
