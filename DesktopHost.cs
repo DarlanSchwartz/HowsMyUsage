@@ -7,6 +7,16 @@ sealed class DesktopHost
 {
     IntPtr host;
     public bool IsAttached(Form widget) => host != IntPtr.Zero && IsWindow(host) && GetParent(widget.Handle) == host;
+    public void Detach(Form widget)
+    {
+        if (!IsAttached(widget)) return;
+        var point = widget.PointToScreen(Point.Empty);
+        SetParent(widget.Handle, IntPtr.Zero);
+        var style = GetWindowLongPtr(widget.Handle, -16).ToInt64();
+        SetWindowLongPtr(widget.Handle, -16, new IntPtr((style & ~0x40000000L) | 0x80000000L));
+        host = IntPtr.Zero;
+        SetWindowPos(widget.Handle, IntPtr.Zero, point.X, point.Y, 0, 0, 0x35);
+    }
     public void Attach(Form widget)
     {
         if (host != IntPtr.Zero && IsWindow(host) && GetParent(widget.Handle) == host) return;

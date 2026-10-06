@@ -6,6 +6,7 @@ sealed class WidgetSettings
 {
     public int? X { get; set; }
     public int? Y { get; set; }
+    public bool AlwaysOnTop { get; set; }
     static string FilePath => Path.Combine(AppContext.BaseDirectory, "widget-settings.json");
 
     public static bool IsSystemDrive(string path) => string.Equals(Path.GetPathRoot(Path.GetFullPath(path)), "C:\\", StringComparison.OrdinalIgnoreCase);

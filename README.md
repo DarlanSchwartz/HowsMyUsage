@@ -8,11 +8,11 @@ A tiny native Windows desktop widget for your AI subscription limits.
 
 ![Desktop widget](docs/widget.png)
 
-Just icons and remaining percentages. Drag anywhere; hover for details. Stays behind your apps, with a system tray icon and no taskbar button. Built with C# / WinForms. No Electron, Tauri, WebView or runtime Node dependency.
+Just icons and remaining percentages, with rounded corners and no outline. Drag anywhere; hover for details. Stays behind your apps by default, or enable **Always on top** to keep it visible. A system tray icon, with no taskbar button. Built with C# / WinForms. No Electron, Tauri, WebView or runtime Node dependency.
 
 ## Install
 
-1. Download **HowsMyUsage-1.0.0-win-x64.zip** from [Releases](https://github.com/DarlanSchwartz/HowsMyUsage/releases/latest).
+1. Download **HowsMyUsage-1.0.1-win-x64.zip** from [Releases](https://github.com/DarlanSchwartz/HowsMyUsage/releases/latest).
 2. Extract the entire ZIP to a writable folder on a drive other than C:.
 3. Double-click **Install.cmd** and enter a destination such as **D:\Apps\HowsMyUsage**.
 4. The installer copies the application and opens it. No administrator access or separate .NET installation required.
@@ -39,7 +39,27 @@ The installer is unsigned; Windows may show its standard download warning. Downl
 
 Percentages mean **remaining**, not consumed. Checked every two minutes. OpenCode, Go, Zen and OpenRouter are not currently supported.
 
-![Tooltip with details and last check time](docs/tooltip.png)
+### Codex
+
+![Codex usage tooltip](docs/tooltip-codex.png)
+
+### Gemini / Antigravity
+
+![Gemini usage tooltip](docs/tooltip-gemini.png)
+
+### Claude Desktop
+
+![Claude weekly usage tooltip with cached status](docs/tooltip-claude.png)
+
+### Context menu
+
+![Widget and tray context menu](docs/context-menu.png)
+
+### Windows system tray
+
+![Actual Windows notification area with HowsMyUsage](docs/tray.png)
+
+HowsMyUsage is the dark gauge icon at the left of this tray screenshot. Left-click to show or hide the widget; right-click for the same context menu. Windows may place it in the hidden-icons area depending on your tray preferences.
 
 Screenshots are rendered from the application; values are snapshots, not live repository data.
 
@@ -48,7 +68,8 @@ Screenshots are rendered from the application; values are snapshots, not live re
 - Drag anywhere to move.
 - Hover an icon or percentage for limits, reset times and last check time.
 - Left-click the tray icon to show or hide.
-- Right-click for Refresh, Start with Windows, and Exit.
+- Right-click for Refresh, Always on top, Start with Windows, and Exit.
+- **Always on top** is saved across restarts. Turn it off to return to desktop-only mode.
 
 Startup uses the current user's **UsageWidget** Run registry entry and a hidden PowerShell launcher. It waits 15 seconds for the desktop, retries failed starts and writes **startup.log** beside the app. Keep the installation drive available at sign-in. No service or scheduled task is installed.
 
@@ -93,7 +114,7 @@ Start-Process .\dist\widget\Usage.exe -ArgumentList '--check' -Wait
 # Exit the running widget first; render previews and verify desktop hosting:
 Start-Process .\dist\widget\Usage.exe -ArgumentList '--check-widget' -Wait
 # Package ZIP and SHA-256 checksum:
-.\package.ps1 -Version 1.0.0
+.\package.ps1 -Version 1.0.1
 ~~~
 
 Checks write to artifacts. Source unavailability is separate from parser checks. Packaging uses the publish manifest, excludes debug symbols and does not package local settings, credentials, caches or diagnostics.

@@ -37,6 +37,14 @@ sealed class UsageWidget : Form
         var menu = new ContextMenuStrip();
         menu.Items.Add("Show / hide widget", null, (_, _) => ToggleWidget());
         menu.Items.Add("Refresh", null, async (_, _) => await RefreshUsage());
+        var alwaysOnTop = new ToolStripMenuItem("Always on top") { Checked = settings.AlwaysOnTop, CheckOnClick = true };
+        alwaysOnTop.CheckedChanged += (_, _) =>
+        {
+            settings.AlwaysOnTop = alwaysOnTop.Checked;
+            ApplyWindowMode();
+            SavePosition();
+        };
+        menu.Items.Add(alwaysOnTop);
         var startup = new ToolStripMenuItem("Start with Windows") { Checked = StartupEnabled(), CheckOnClick = true };
         startup.CheckedChanged += (_, _) =>
         {
@@ -81,7 +89,7 @@ sealed class UsageWidget : Form
             Location = settings.X is int x && settings.Y is int y ? new Point(x, y) : new Point(area.Right - Width - 24, area.Bottom - Height - 24);
             var screen = Screen.FromRectangle(Bounds).WorkingArea;
             Location = new Point(Math.Clamp(Left, screen.Left, Math.Max(screen.Left, screen.Right - Width)), Math.Clamp(Top, screen.Top, Math.Max(screen.Top, screen.Bottom - Height)));
-            desktop.Attach(this);
+            ApplyWindowMode();
             timer.Start();
             await RefreshUsage();
             if (Environment.GetCommandLineArgs().Contains("--check-widget"))
@@ -91,9 +99,28 @@ sealed class UsageWidget : Form
                 DrawToBitmap(preview, ClientRectangle);
                 preview.Save("artifacts/widget-preview.png");
                 tips.SavePreview(values[1], "artifacts/tooltip-preview.png");
+                for (int i = 0; i < names.Length; i++)
+                    tips.SavePreview(values[i], $"artifacts/tooltip-{names[i].ToLowerInvariant()}.png");
+                menu.Show(this, new Point(0, Height));
+                using (var menuPreview = new Bitmap(menu.Width, menu.Height))
+                {
+                    menu.DrawToBitmap(menuPreview, new Rectangle(Point.Empty, menu.Size));
+                    menuPreview.Save("artifacts/context-menu.png");
+                }
+                menu.Close();
+                bool originalMode = settings.AlwaysOnTop;
+                var originalPosition = PointToScreen(Point.Empty);
+                settings.AlwaysOnTop = true;
+                ApplyWindowMode();
+                bool topModePassed = TopMost && !desktop.IsAttached(this) && !ShowInTaskbar && PointToScreen(Point.Empty) == originalPosition;
+                settings.AlwaysOnTop = false;
+                ApplyWindowMode();
+                bool desktopModePassed = !TopMost && desktop.IsAttached(this) && PointToScreen(Point.Empty) == originalPosition;
+                settings.AlwaysOnTop = originalMode;
+                ApplyWindowMode();
                 File.WriteAllText("artifacts/widget-check.json", System.Text.Json.JsonSerializer.Serialize(new
                 {
-                    desktopAttached = desktop.IsAttached(this), topMost = TopMost, showInTaskbar = ShowInTaskbar,
+                    topModePassed, desktopModePassed, desktopAttached = desktop.IsAttached(this), topMost = TopMost, showInTaskbar = ShowInTaskbar,
                     logos = logos.Count, position = PointToScreen(Point.Empty), roundedCorners = Region != null && !Region.IsVisible(0, 0) && Region.IsVisible(Width / 2, Height / 2)
                 }));
                 Close();
@@ -149,19 +176,24 @@ sealed class UsageWidget : Form
         Invalidate();
     }
 
-    protected override void OnPaint(PaintEventArgs e)
+    void ApplyWindowMode()
     {
-        base.OnPaint(e);
-        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        using var outline = RoundedOutline(0.5f);
-        using var pen = new Pen(Color.FromArgb(60, 63, 68));
-        e.Graphics.DrawPath(pen, outline);
+        if (settings.AlwaysOnTop)
+        {
+            desktop.Detach(this);
+            TopMost = true;
+        }
+        else
+        {
+            TopMost = false;
+            desktop.Attach(this);
+        }
     }
 
     void ToggleWidget()
     {
         if (Visible) Hide();
-        else { Show(); desktop.Attach(this); }
+        else { Show(); ApplyWindowMode(); }
     }
 
     void AttachDrag(Control control)
