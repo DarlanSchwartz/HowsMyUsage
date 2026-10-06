@@ -10,6 +10,66 @@ A tiny native Windows desktop widget for your AI subscription limits.
 
 Just icons and remaining percentages, with rounded corners and no outline. Drag anywhere; hover for details. Stays behind your apps by default, or enable **Always on top** to keep it visible. A system tray icon, with no taskbar button. Built with C# / WinForms. No Electron, Tauri, WebView or runtime Node dependency.
 
+## See it in action
+
+### Always on top
+
+![HowsMyUsage floating above another application](docs/always-on-top.png)
+
+Keep your remaining usage visible while you work in another app. Right-click the widget or tray icon and enable **Always on top**. The choice is saved across restarts; turn it off to return the widget to the desktop behind your apps.
+
+### Usage at a glance
+
+| Provider | Required source | Display |
+| --- | --- | --- |
+| Codex | Installed, signed-in Codex CLI/app-server | Lowest remaining account quota |
+| Gemini | Running, signed-in Antigravity | Lowest remaining Gemini model quota |
+| Claude | Signed-in Claude Desktop | Weekly all-model quota remaining |
+
+Percentages mean **remaining**, not consumed. Checked every two minutes. OpenCode, Go, Zen and OpenRouter are not currently supported.
+
+### Codex
+
+![Codex usage tooltip](docs/tooltip-codex.png)
+
+Hover Codex to see the remaining quota, reset time and last check.
+
+### Gemini / Antigravity
+
+![Gemini usage tooltip](docs/tooltip-gemini.png)
+
+Hover Gemini to see Antigravity model limits. Models with identical limits are grouped for readability.
+
+### Claude Desktop
+
+![Claude weekly usage tooltip with cached status](docs/tooltip-claude.png)
+
+Claude shows the weekly all-model allowance. This example is a cached reading; the tooltip makes its age and unavailable live refresh explicit.
+
+### Context menu
+
+![Widget and tray context menu](docs/context-menu.png)
+
+Refresh immediately, switch Always on top, start with Windows, or exit—all from the same right-click menu.
+
+### Windows system tray
+
+![Actual Windows notification area with HowsMyUsage](docs/tray-compact.png)
+
+HowsMyUsage is the dark gauge icon just to the right of the hidden-icons arrow. Left-click to show or hide the widget; right-click for the same context menu. Windows may place it in the hidden-icons area depending on your tray preferences.
+
+Screenshots include application-rendered previews and actual Windows captures. Values are snapshots, not live repository data.
+
+## Controls
+
+- Drag anywhere to move.
+- Hover an icon or percentage for limits, reset times and last check time.
+- Left-click the tray icon to show or hide.
+- Right-click for Refresh, Always on top, Start with Windows, and Exit.
+- **Always on top** is saved across restarts. Turn it off to return to desktop-only mode.
+
+Startup uses the current user's **UsageWidget** Run registry entry and a hidden PowerShell launcher. It waits 15 seconds for the desktop, retries failed starts and writes **startup.log** beside the app. Keep the installation drive available at sign-in. No service or scheduled task is installed.
+
 ## Install
 
 1. Download **HowsMyUsage-1.0.1-win-x64.zip** from [Releases](https://github.com/DarlanSchwartz/HowsMyUsage/releases/latest).
@@ -28,50 +88,6 @@ The shortcut option explicitly permits writing to the Windows Desktop, which may
 The installer is unsigned; Windows may show its standard download warning. Download only from this repository's releases. SHA-256 checksum files accompany releases.
 
 **Portable:** run **app\Usage.exe** directly from the extracted folder. Keep the complete app folder together.
-
-## Providers
-
-| Provider | Required source | Display |
-| --- | --- | --- |
-| Codex | Installed, signed-in Codex CLI/app-server | Lowest remaining account quota |
-| Gemini | Running, signed-in Antigravity | Lowest remaining Gemini model quota |
-| Claude | Signed-in Claude Desktop | Weekly all-model quota remaining |
-
-Percentages mean **remaining**, not consumed. Checked every two minutes. OpenCode, Go, Zen and OpenRouter are not currently supported.
-
-### Codex
-
-![Codex usage tooltip](docs/tooltip-codex.png)
-
-### Gemini / Antigravity
-
-![Gemini usage tooltip](docs/tooltip-gemini.png)
-
-### Claude Desktop
-
-![Claude weekly usage tooltip with cached status](docs/tooltip-claude.png)
-
-### Context menu
-
-![Widget and tray context menu](docs/context-menu.png)
-
-### Windows system tray
-
-![Actual Windows notification area with HowsMyUsage](docs/tray-compact.png)
-
-HowsMyUsage is the dark gauge icon just to the right of the hidden-icons arrow. Left-click to show or hide the widget; right-click for the same context menu. Windows may place it in the hidden-icons area depending on your tray preferences.
-
-Screenshots are rendered from the application; values are snapshots, not live repository data.
-
-## Controls
-
-- Drag anywhere to move.
-- Hover an icon or percentage for limits, reset times and last check time.
-- Left-click the tray icon to show or hide.
-- Right-click for Refresh, Always on top, Start with Windows, and Exit.
-- **Always on top** is saved across restarts. Turn it off to return to desktop-only mode.
-
-Startup uses the current user's **UsageWidget** Run registry entry and a hidden PowerShell launcher. It waits 15 seconds for the desktop, retries failed starts and writes **startup.log** beside the app. Keep the installation drive available at sign-in. No service or scheduled task is installed.
 
 ## Setup and limitations
 
