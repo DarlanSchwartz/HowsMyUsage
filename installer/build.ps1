@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$Payload, [Parameter(Mandatory)][string]$Output, [string]$Version = '1.1.3')
+param([Parameter(Mandatory)][string]$Payload, [Parameter(Mandatory)][string]$Output, [string]$Version = '1.2.0')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot
 $scratch = Join-Path $root ('.build/setup-' + [Guid]::NewGuid().ToString('N'))
@@ -9,6 +9,20 @@ try {
     $locator = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
     $vs = & $locator -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
     if (!$vs) { throw 'Visual Studio C++ x64 build tools are required.' }
+    $vc = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+    $icon = (Join-Path $root 'assets/usage.ico').Replace('\', '/')
+    $manifest = (Join-Path $PSScriptRoot 'setup.manifest').Replace('\', '/')
+    @"
+1 ICON "$icon"
+1 24 "$manifest"
+"@ | Set-Content -LiteralPath "$scratch/uninstall.rc" -Encoding UTF8
+    $uninstallSource = Join-Path $PSScriptRoot 'Uninstall.cpp'
+    $uninstallOutput = Join-Path $Payload 'Uninstall.exe'
+    $compileUninstall = "call `"$vc`" >nul && rc /nologo /fo `"$scratch/uninstall.res`" `"$scratch/uninstall.rc`" && cl /nologo /O2 /MT /std:c++17 /EHsc /utf-8 /DUNICODE /D_UNICODE `"$uninstallSource`" `"$scratch/uninstall.res`" /Fo`"$scratch/uninstall.obj`" /Fe`"$uninstallOutput`" /link /SUBSYSTEM:WINDOWS /MANIFEST:NO user32.lib shell32.lib ole32.lib uuid.lib advapi32.lib comctl32.lib"
+    & cmd.exe /d /c $compileUninstall
+    if ($LASTEXITCODE -ne 0) { throw 'Native uninstaller compilation failed.' }
+    $relativeFiles = @((Get-ChildItem -LiteralPath $Payload -File -Recurse).FullName | ForEach-Object { $_.Substring($Payload.TrimEnd('\', '/').Length + 1) }) + 'install-files.txt'
+    [IO.File]::WriteAllLines((Join-Path $Payload 'install-files.txt'), $relativeFiles, [Text.UTF8Encoding]::new($false))
     $files = Get-ChildItem -LiteralPath $Payload -File -Recurse | Sort-Object FullName
     $ddf = @('.OPTION EXPLICIT', '.Set Cabinet=on', '.Set Compress=on', '.Set CompressionType=LZX', '.Set CompressionMemory=21',
         '.Set MaxDiskSize=0', '.Set CabinetNameTemplate=app.cab', ".Set DiskDirectoryTemplate=$scratch", ".Set RptFileName=$scratch/report.txt", ".Set InfFileName=$scratch/setup.inf")

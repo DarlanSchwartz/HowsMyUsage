@@ -1,4 +1,4 @@
-param([string]$Version = '1.1.3')
+param([string]$Version = '1.2.0')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $projectRoot
@@ -25,16 +25,6 @@ if (!(Test-Path "$stage/app/Usage.exe")) { throw 'Publish manifest did not inclu
 Copy-Item LICENSE,THIRD-PARTY-NOTICES.md -Destination "$stage/app"
 New-Item -ItemType Directory -Force "$stage/app/docs" | Out-Null
 Copy-Item -Recurse docs/licenses -Destination "$stage/app/docs"
-Copy-Item installer/Uninstall.ps1 -Destination "$stage/app"
-$installedFiles = @((Get-ChildItem "$stage/app" -File -Recurse).FullName | ForEach-Object { $_.Substring((Join-Path $stage 'app').Length + 1) }) + 'install-files.json'
-ConvertTo-Json -InputObject $installedFiles | Set-Content -LiteralPath "$stage/app/install-files.json" -Encoding UTF8
-Copy-Item installer/install.ps1,installer/Install.cmd,README.md,LICENSE,THIRD-PARTY-NOTICES.md -Destination $stage
-Copy-Item -Recurse docs -Destination $stage
-$zip = Join-Path $projectRoot "dist/HowsMyUsage-$Version-win-x64.zip"
-Compress-Archive -Path "$stage/*" -DestinationPath $zip -Force
-$hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-Set-Content -Path "$zip.sha256" -Value "$hash  $([IO.Path]::GetFileName($zip))"
-Write-Host "Release: $zip"
 $setup = Join-Path $projectRoot "dist/HowsMyUsage-$Version-Setup.exe"
 & ./installer/build.ps1 -Payload "$stage/app" -Output $setup -Version $Version
 $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()

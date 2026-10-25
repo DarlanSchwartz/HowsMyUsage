@@ -16,6 +16,7 @@
 #include <vector>
 #include <algorithm>
 #include <cwctype>
+#include "ShellShortcuts.h"
 using std::min;
 using std::max;
 #include <gdiplus.h>
@@ -63,29 +64,6 @@ class Installation {
     }
 public:
     Installation(HWND owner, fs::path folder) : window(owner), destination(std::move(folder)) {}
-    void CreateDesktopShortcut() {
-        HRESULT initialized = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-        IShellLinkW* link = nullptr;
-        HRESULT result = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&link));
-        if (SUCCEEDED(result)) {
-            link->SetPath((destination / L"Usage.exe").c_str());
-            link->SetWorkingDirectory(destination.c_str());
-            link->SetIconLocation((destination / L"Usage.exe").c_str(), 0);
-            link->SetDescription(L"HowsMyUsage");
-            IPersistFile* file = nullptr;
-            result = link->QueryInterface(IID_PPV_ARGS(&file));
-            if (SUCCEEDED(result)) {
-                PWSTR desktop = nullptr;
-                result = SHGetKnownFolderPath(FOLDERID_Desktop, 0, nullptr, &desktop);
-                if (SUCCEEDED(result)) result = file->Save((fs::path(desktop) / L"HowsMyUsage.lnk").c_str(), TRUE);
-                CoTaskMemFree(desktop);
-                file->Release();
-            }
-            link->Release();
-        }
-        if (SUCCEEDED(initialized)) CoUninitialize();
-        if (FAILED(result)) throw std::runtime_error("App installed, but Desktop shortcut creation failed. Retry without that option.");
-    }
     static fs::path Validate(const std::wstring& value) {
         if (value.empty()) throw std::runtime_error("Choose an installation folder.");
         fs::path path = fs::absolute(fs::path(value)).lexically_normal();
@@ -135,7 +113,8 @@ public:
         Register(uninstall, L"DisplayIcon", folder + L"\\Usage.exe,0");
         wchar_t system[MAX_PATH]; GetSystemDirectoryW(system, MAX_PATH);
         auto powershell = std::wstring(system) + L"\\WindowsPowerShell\\v1.0\\powershell.exe";
-        Register(uninstall, L"UninstallString", L"\"" + powershell + L"\" -NoProfile -ExecutionPolicy Bypass -File \"" + folder + L"\\Uninstall.ps1\"");
+        Register(uninstall, L"UninstallString", L"\"" + folder + L"\\Uninstall.exe\"");
+        Register(uninstall, L"QuietUninstallString", L"\"" + folder + L"\\Uninstall.exe\" /S");
         const wchar_t* run = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
         if (startup) Register(run, L"UsageWidget", L"\"" + powershell + L"\" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File \"" + folder + L"\\startup.ps1\"");
         if (!startup) {
@@ -144,7 +123,12 @@ public:
                 std::wstring(existing).find(folder + L"\\startup.ps1") != std::wstring::npos)
                 RegDeleteKeyValueW(HKEY_CURRENT_USER, run, L"UsageWidget");
         }
-        if (desktopShortcut) CreateDesktopShortcut();
+        auto programs = ShellShortcuts::Folder(FOLDERID_Programs) / L"HowsMyUsage";
+        fs::create_directories(programs);
+        ShellShortcuts::Write(programs / L"HowsMyUsage.lnk", destination / L"Usage.exe");
+        ShellShortcuts::Write(programs / L"Uninstall HowsMyUsage.lnk", destination / L"Uninstall.exe");
+        if (desktopShortcut) ShellShortcuts::Write(ShellShortcuts::Folder(FOLDERID_Desktop) / L"HowsMyUsage.lnk", destination / L"Usage.exe");
+        for (const wchar_t* obsolete : {L"Uninstall.ps1", L"install-files.json"}) fs::remove(destination / obsolete);
     }
 };
 

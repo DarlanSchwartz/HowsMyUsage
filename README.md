@@ -1,214 +1,86 @@
 # HowsMyUsage
 
-A tiny native Windows desktop widget for your AI subscription limits.
-
 ![Windows x64](https://img.shields.io/badge/Windows-x64-0078D4)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![MIT](https://img.shields.io/badge/license-MIT-green)
 
 ![Desktop widget](docs/widget-weekly.png)
 
-Just icons and remaining percentages, with rounded corners and no outline. Drag anywhere; hover for details. Stays behind your apps by default, or enable **Always on top** to keep it visible. A system tray icon, with no taskbar button. Built with C# / WinForms. No Electron, Tauri, WebView or runtime Node dependency.
+A native Windows widget showing your remaining Codex, Gemini and Claude usage.
 
-## See it in action
+**[Download the installer](https://github.com/DarlanSchwartz/HowsMyUsage/releases/latest)**
 
-### Choose your providers
+## Install
 
-Right-click the tray icon or widget â†’ **Providers**. Toggle Codex, Gemini and Claude independently. Disabled providers disappear and stop being queried. The widget adjusts its width and remembers the selection. Turn all three off to keep only the tray icon; enable a provider from the tray menu to bring the widget back.
+1. Download HowsMyUsage-1.2.0-Setup.exe and open it.
+2. Choose the folder and shortcut options, then click **Install**.
+3. Click **Open HowsMyUsage**.
+
+Windows x64. No administrator access or separate .NET installation required.
+The app and uninstaller are added to the Start menu. A Desktop shortcut and automatic startup are optional.
+
+**Update:** exit from the tray, then run the new installer.
+
+**Uninstall:** use Windows **Installed apps > HowsMyUsage > Uninstall**, or **Uninstall HowsMyUsage** in the Start menu.
+
+## Use
+
+- Drag to move; click the hover pin to lock the position.
+- Hover a provider for limits, reset times and the last check.
+- Right-click the widget or tray icon to choose providers, size, startup or **Always on top**.
+- Left-click the tray icon to show or hide the widget.
+
+Percentages show remaining usage and refresh every two minutes.
+
+## Providers
+
+| Provider | Requires |
+| --- | --- |
+| Codex | Installed and signed-in Codex |
+| Gemini | Running and signed-in Antigravity |
+| Claude | Signed-in Claude Desktop |
+
+A dash means usage is unavailable. Gray values may be cached; hover for details.
+For Claude detection problems, use **Claude > Data folder** or **Copy diagnostics** in the tray menu.
+
+## Privacy
+
+No analytics or telemetry. The widget reads existing local sign-ins and requests usage status.
+Saved Claude connections are encrypted with Windows DPAPI.
+
+## Screenshots
 
 ![Widget with one provider](docs/providers-one.png)
 
 ![Widget with two providers](docs/providers-two.png)
 
-### Simple setup
-
-Choose a folder, optionally enable **Start with Windows**, then click **Install**. The setup uses a native Windows interface and includes the .NET runtime.
-
-### Three widget sizes
-
-Right-click the widget or tray icon â†’ **Widget size** â†’ **Large**, **Medium**, or **Small**. Icons, text and spacing scale together, and the choice is saved across restarts. Tooltips stay readable at their normal size.
-
-**Large â€” the original size (64 px tall at 100% Windows scaling)**
-
 ![Large widget](docs/widget-large-aligned.png)
-
-**Medium â€” 80% scale (51 px tall)**
 
 ![Medium widget](docs/widget-medium-aligned.png)
 
-**Small â€” 62.5% scale (40 px tall)**
-
 ![Small widget](docs/widget-small-aligned.png)
-
-These are actual application renders at the same Windows display scale. Width adapts to the displayed percentages.
-
-### Always on top
 
 ![HowsMyUsage floating above another application](docs/always-on-top.png)
 
-Keep your remaining usage visible while you work in another app. Right-click the widget or tray icon and enable **Always on top**. The choice is saved across restarts; turn it off to return the widget to the desktop behind your apps.
-
-### Pin the position
-
 ![Hover pin outside the widget's top-right corner](docs/widget-pin-external.png)
-
-Hover the widget to reveal the pin outside its top-right corner. Click it to prevent dragging; click again to unlock. The position lock is saved across restarts and is independent of **Always on top**. The widget stays inside the usable desktop area so the taskbar cannot cover it.
 
 ![Dark pin tooltip explaining the position lock](docs/pin-tooltip.png)
 
-The tooltip explains the current lock state and stays within the screen's usable area, including near the taskbar.
-
-### Usage at a glance
-
-| Provider | Required source | Display |
-| --- | --- | --- |
-| Codex | Installed, signed-in Codex CLI/app-server | Lowest remaining account quota |
-| Gemini | Running, signed-in Antigravity | Gemini shared weekly quota |
-| Claude | Signed-in Claude Desktop | Weekly all-model quota remaining |
-
-Percentages mean **remaining**, not consumed. Checked every two minutes. OpenCode, Go, Zen and OpenRouter are not currently supported.
-
-### Codex
-
 ![Codex usage tooltip](docs/tooltip-codex-fixed.png)
-
-Hover Codex to see the remaining quota, reset time and last check.
-
-### Gemini / Antigravity
 
 ![Gemini usage tooltip](docs/tooltip-antigravity-weekly.png)
 
-The Gemini icon shows **Gemini weekly remaining**, not the five-hour window. Hover it to see both Antigravity pools: Gemini and Claude/GPT, each with weekly and five-hour limits. These pools are separate; Claude models inside Antigravity do not consume the Claude Desktop subscription shown by the separate Claude icon.
-
-Weekly readings come from Antigravity's quota-summary endpoint. If weekly data is unavailable, the indicator shows a dash rather than substituting session usage.
-
-### Claude Desktop
-
 ![Claude weekly usage tooltip with cached status](docs/tooltip-claude.png)
-
-Claude shows the weekly all-model allowance. The tooltip also includes the five-hour session and separate model allowances, including Fable, when Claude returns them. This example is a cached reading; the tooltip makes its age and unavailable live refresh explicit.
-
-### Context menu
 
 ![Widget and tray context menu](docs/context-menu-sizes.png)
 
-Refresh immediately, choose providers and widget size, switch Always on top, start with Windows, or exitâ€”all from the same right-click menu.
-
-### Windows system tray
-
 ![Actual Windows notification area with HowsMyUsage](docs/tray-compact.png)
 
-HowsMyUsage is the dark gauge icon just to the right of the hidden-icons arrow. Left-click to show or hide the widget; right-click for the same context menu. Windows may place it in the hidden-icons area depending on your tray preferences.
+## Development and license
 
-Screenshots include application-rendered previews and actual Windows captures. Values are snapshots, not live repository data.
+Build instructions and project layout: [Development](docs/DEVELOPMENT.md).
 
-## Controls
+[MIT license](LICENSE). Provider logos belong to their respective owners.
+[Third-party notices](THIRD-PARTY-NOTICES.md).
 
-- Drag anywhere to move when the position is unlocked.
-- Hover the widget to reveal the top-right pin. Click to lock its position and prevent dragging; click again to unlock. The tooltip explains the current state, and the lock persists across restarts.
-- Hover an icon or percentage for limits, reset times and last check time.
-- Left-click the tray icon to show or hide.
-- Right-click for Refresh, Providers, Widget size, Always on top, Start with Windows, and Exit.
-- **Always on top** is saved across restarts. Turn it off to return to desktop-only mode.
-
-Startup uses the current user's **UsageWidget** Run registry entry and a hidden PowerShell launcher. It waits 15 seconds for the desktop, retries failed starts and writes **startup.log** beside the app. Keep the installation drive available at sign-in. No service or scheduled task is installed.
-
-## Install
-
-1. Download **HowsMyUsage-1.1.3-Setup.exe** from [Releases](https://github.com/DarlanSchwartz/HowsMyUsage/releases/latest).
-2. Open it and choose a writable application folder. New installations default to %LOCALAPPDATA%\Programs\HowsMyUsage, normally on C:. Any local drive is supported.
-3. Choose whether to start with Windows and create a Desktop shortcut, then click **Install**.
-4. Click **Open HowsMyUsage**. No administrator access or separate .NET installation required.
-
-Updates preserve the widget's preferences and encrypted Claude connection. Exit the running widget from its tray menu before updating. Setup scratch files stay on the installation drive and are removed when setup finishes. The graphical installer creates a Desktop shortcut by default; uncheck **Desktop shortcut** to skip it. No Start menu shortcut is created.
-
-**Uninstall:** use Windows **Installed apps â†’ HowsMyUsage â†’ Uninstall**, or run `Uninstall.ps1` from the installation folder. Exit the widget first. Packaged files and its matching startup entry are removed; local preferences and encrypted connections are preserved. Delete those remaining files yourself if you no longer need them.
-
-**Portable / script installer:** download and extract **HowsMyUsage-1.1.3-win-x64.zip**. Run **app\Usage.exe** directly, or double-click **Install.cmd** to copy the app to another folder.
-
-For a Desktop shortcut and automatic startup, open PowerShell in the extracted folder:
-
-~~~powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -InstallDir 'D:\Apps\HowsMyUsage' -DesktopShortcut -StartWithWindows
-~~~
-
-The shortcut option explicitly permits writing to the Windows Desktop, which may be on C:. App files, settings and app-owned temporary files remain beside the executable. Installation, startup, saved preferences and encrypted Claude connections work on C: as well as other drives.
-
-The installer is unsigned; Windows may show its standard download warning. Download only from this repository's releases. SHA-256 checksum files accompany releases.
-
-Keep the complete app folder together. For unattended installation: `HowsMyUsage-1.1.3-Setup.exe /S /D=D:\Apps\HowsMyUsage` (add `/STARTUP` to enable automatic startup, or `/NOSHORTCUT` to skip the Desktop shortcut).
-
-## Setup and limitations
-
-**Codex:** sign in to Codex. The executable must be on PATH or in the supported OpenAI/Codex local installation folder. Existing CODEX_HOME is respected.
-
-**Gemini / Antigravity:** open Antigravity and sign in. The widget reads the local language server's RetrieveUserQuotaSummary endpoint. Older versions without weekly summary support must be updated. The Gemini indicator uses only Gemini's weekly pool; the tooltip also includes the independent Claude/GPT pool and both five-hour windows.
-
-**Claude:** the widget attempts to read Desktop's existing session in read-only mode and query usage. Desktop may lock its cookie database; unsupported cookie encryption can also prevent connection. For the first connection, if convenient, fully exit Claude Desktop, refresh the widget, then reopen Claude. A successful connection is saved with Windows DPAPI encryption beside the executable and matched to the Desktop account, so subsequent refreshes can reuse it while Desktop is open. Claude profile detection supports legacy and Network cookie layouts, Default profiles, Microsoft Store packages, and the newer %LOCALAPPDATA%\Claude-Data\claude_* folders. Session/history folders take priority over config-only folders. Older versions without an account marker can use their current cookies but cannot persist an account-scoped connection. Otherwise the widget may use cached weekly and session readings from local history, even when the cookie database is absent; separate model limits such as Fable require the live response. The tooltip identifies cached readings, their original time and the reason live retrieval failed. **Last checked is the query time, not proof that cached data is fresh.** For a custom data location, choose **Claude → Data folder…** from the tray menu. **Use automatic detection** resets that override. **Copy diagnostics** copies version, discovery flags, file accessibility and HTTP status without paths, account IDs or credentials. Live Claude retrieval has not been validated on every Desktop version.
-
-**Codex session limits:** the tooltip includes a session allowance when the account's usage response supplies one. An absent session limit is not substituted or inferred from the subscription tier.
-
-A dash means no usable quota. Gray values can indicate a cached reading or source error. Provider endpoints and local storage formats may change. This unofficial tool is not affiliated with OpenAI, Google or Anthropic.
-
-## Privacy
-
-No application analytics or telemetry is implemented. Authentication is read locally; you do not paste credentials into the widget. Claude session values are sent only to claude.ai. The saved connection, `claude-session.bin`, is encrypted with Windows DPAPI for the current Windows user, stored beside the executable, and excluded from Git and release packages. Delete that file to remove the saved connection. Secrets are not written to settings or diagnostics. Queries retrieve status rather than generate model responses. Provider applications retain their own storage and logging behavior.
-
-Never attach cookies, authentication files or unredacted account responses to issues.
-
-## Update / uninstall
-
-**Update:** exit from the tray and run the new release's installer with the same destination. Existing widget-settings.json is preserved.
-
-**Uninstall:** disable Start with Windows, exit, delete the installation folder and remove the Desktop shortcut if created.
-
-## Build
-
-Project layout:
-
-- `src/HowsMyUsage/`: application entry point, UI, settings and providers.
-- `scripts/`: build and release packaging.
-- `installer/`: native setup and installation scripts.
-- `runtime/`: launcher distributed with the application.
-- `assets/` and `docs/`: icons, screenshots and licenses.
-- `tools/`: asset generation tools.
-- `.build/`, `artifacts/` and `dist/`: ignored caches, validation output and release files.
-
-Requires Windows x64 and the .NET 10 SDK.
-
-~~~powershell
-git clone https://github.com/DarlanSchwartz/HowsMyUsage.git D:\Projects\HowsMyUsage
-cd D:\Projects\HowsMyUsage
-.\scripts\build.ps1
-.\dist\widget\Usage.exe
-~~~
-
-Build caches and temporary files are redirected to .build inside the repo. Self-contained output is in dist/widget.
-
-~~~powershell
-# Parser checks plus real source queries; no model generation:
-Start-Process .\dist\widget\Usage.exe -ArgumentList '--check' -Wait
-# Exit the running widget first; render previews and verify desktop hosting:
-Start-Process .\dist\widget\Usage.exe -ArgumentList '--check-widget' -Wait
-# Package the custom installer, portable ZIP and SHA-256 checksums:
-# Requires Visual Studio C++ x64 build tools and the Windows SDK.
-.\scripts\package.ps1 -Version 1.1.3
-~~~
-
-Checks write to artifacts. Source unavailability is separate from parser checks. Packaging uses the publish manifest, excludes debug symbols and does not package local settings, credentials, caches or diagnostics.
-
-Assets are checked in. Node is needed only to regenerate them:
-
-~~~powershell
-npm ci --prefix tools --cache .build/npm
-node tools/render-icons.cjs
-node tools/render-app-icon.cjs
-~~~
-
-## License and credits
-
-Original code: [MIT](LICENSE), copyright 2026 Darlan Schwartz.
-Provider logos: [SVGL](https://svgl.app/). Trademarks belong to their respective owners.
-See [third-party notices](THIRD-PARTY-NOTICES.md) and [licenses](docs/licenses/) for bundled runtime and build-tool licenses.
-
-[Report a bug](https://github.com/DarlanSchwartz/HowsMyUsage/issues) with Windows version, provider and a redacted screenshot.
+Unofficial project, not affiliated with OpenAI, Google or Anthropic.
