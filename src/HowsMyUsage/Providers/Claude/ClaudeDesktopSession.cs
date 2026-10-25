@@ -16,14 +16,14 @@ static class ClaudeDesktopSession
 
     public static (string SessionKey, string? Organization) Read(string folder)
     {
-        var path = CookiePath(folder) ?? throw new InvalidOperationException("Claude data found, but its cookie database is missing. Check Claude > Data folder or copy diagnostics.");
+        var path = CookiePath(folder) ?? throw new InvalidOperationException("Claude Desktop was detected, but its session database is unavailable.");
         var statePath = Path.Combine(folder, "Local State");
-        if (!File.Exists(statePath)) throw new InvalidOperationException("Claude data found, but Local State is missing. Check Claude > Data folder or copy diagnostics.");
+        if (!File.Exists(statePath)) throw new InvalidOperationException("Claude Desktop was detected, but its session encryption metadata is unavailable.");
         using var state = JsonDocument.Parse(File.ReadAllText(statePath));
         if (state.RootElement.ValueKind != JsonValueKind.Object ||
             !state.RootElement.TryGetProperty("os_crypt", out var crypt) || crypt.ValueKind != JsonValueKind.Object ||
             !crypt.TryGetProperty("encrypted_key", out var encryptedKey) || encryptedKey.ValueKind != JsonValueKind.String)
-            throw new InvalidOperationException("This Claude Desktop encryption format is not supported. Copy diagnostics from the Claude tray menu.");
+            throw new InvalidOperationException("This Claude Desktop encryption format is not supported yet.");
         var wrapped = Convert.FromBase64String(encryptedKey.GetString()!);
         if (!wrapped.AsSpan().StartsWith("DPAPI"u8)) throw new InvalidOperationException("Unsupported Claude Desktop sign-in format.");
         var key = Unprotect(wrapped[5..]);
@@ -56,7 +56,7 @@ static class ClaudeDesktopSession
                 if (name == "lastActiveOrg" && organization == null && Guid.TryParse(value, out var org)) organization = org.ToString();
             }
             if (result != 101) throw new InvalidOperationException("Claude session is busy. Please retry.");
-            if (string.IsNullOrWhiteSpace(session)) throw new InvalidOperationException("Claude data folder found, but no supported sign-in cookie. Check Claude > Data folder or copy diagnostics from the tray menu.");
+            if (string.IsNullOrWhiteSpace(session)) throw new InvalidOperationException("Claude Desktop was detected, but its sign-in session could not be read.");
             return (session, organization);
         }
         finally

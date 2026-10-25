@@ -12,7 +12,6 @@ sealed class WidgetSettings
     public bool ShowCodex { get; set; } = true;
     public bool ShowGemini { get; set; } = true;
     public bool ShowClaude { get; set; } = true;
-    public string? ClaudeProfileDirectory { get; set; }
     public bool ProviderEnabled(int index) => index switch
     {
         0 => ShowCodex, 1 => ShowGemini, 2 => ShowClaude,

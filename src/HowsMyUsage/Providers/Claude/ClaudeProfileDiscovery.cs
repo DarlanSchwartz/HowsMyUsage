@@ -1,6 +1,3 @@
-using System.Reflection;
-using System.Text.Json;
-
 namespace Usage;
 
 static class ClaudeProfileDiscovery
@@ -30,8 +27,7 @@ static class ClaudeProfileDiscovery
         }
     }
 
-    public static string? Find(string? configuredDirectory = null) => Select(
-        string.IsNullOrWhiteSpace(configuredDirectory) ? Candidates() : [configuredDirectory]);
+    public static string? Find() => Select(Candidates());
 
     internal static string? Select(IEnumerable<string> paths) => paths.Where(Directory.Exists)
         .Select(folder => new { Folder = folder, Files = new[] { ClaudeDesktopSession.CookiePath(folder),
@@ -45,32 +41,4 @@ static class ClaudeProfileDiscovery
 
     static bool IsSessionData(string? path) => Path.GetFileName(path) is "Cookies" or "plan-usage-history.json";
 
-    public static string DiagnosticReport(string? configuredDirectory, int? lastHttpStatus)
-    {
-        var folder = Find(configuredDirectory);
-        var cookie = folder == null ? null : ClaudeDesktopSession.CookiePath(folder);
-        string access = "not-found";
-        if (cookie != null)
-        {
-            try
-            {
-                using var file = new FileStream(cookie, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                access = "readable";
-            }
-            catch (IOException) { access = "locked-or-unreadable"; }
-            catch (UnauthorizedAccessException) { access = "access-denied"; }
-        }
-        // Deliberately excludes paths, account IDs, cookies, tokens and response bodies.
-        return JsonSerializer.Serialize(new
-        {
-            version = typeof(ClaudeProfileDiscovery).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
-            windows = Environment.OSVersion.Version.ToString(), customFolder = !string.IsNullOrWhiteSpace(configuredDirectory),
-            profileFound = folder != null, profilesDetected = Candidates().Count(path => Select([path]) != null),
-            cookieLayout = folder == null || cookie == null ? null : Path.GetRelativePath(folder, cookie), cookieAccess = access,
-            localState = folder != null && File.Exists(Path.Combine(folder, "Local State")),
-            config = folder != null && File.Exists(Path.Combine(folder, "config.json")),
-            usageHistory = folder != null && File.Exists(Path.Combine(folder, "plan-usage-history.json")),
-            savedConnection = File.Exists(Path.Combine(AppContext.BaseDirectory, "claude-session.bin")), lastHttpStatus
-        }, new JsonSerializerOptions { WriteIndented = true });
-    }
 }

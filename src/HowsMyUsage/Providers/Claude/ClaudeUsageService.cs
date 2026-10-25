@@ -7,8 +7,6 @@ namespace Usage;
 sealed class ClaudeUsageService : IDisposable
 {
     readonly HttpClient client = new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(15) };
-    public string? ProfileDirectory { get; set; }
-    public int? LastHttpStatus { get; private set; }
     DateTimeOffset retryAfter;
     (string SessionKey, string? Organization)? cachedSession;
     string? sessionIdentity;
@@ -30,7 +28,6 @@ sealed class ClaudeUsageService : IDisposable
 
     public async Task<Snapshot> Read(CancellationToken token)
     {
-        LastHttpStatus = null;
         try
         {
             var live = await ReadLive(token);
@@ -40,7 +37,7 @@ sealed class ClaudeUsageService : IDisposable
         catch (Exception e) when (e is InvalidOperationException or IOException or UnauthorizedAccessException or JsonException or CryptographicException or HttpRequestException)
         {
             Log($"live failed ({e.GetType().Name}): {e.Message} | saved connection: {(File.Exists(ConnectionPath) ? "yes" : "no")}, in memory: {(cachedSession != null ? "yes" : "no")}");
-            var folder = ClaudeProfileDiscovery.Find(ProfileDirectory);
+            var folder = ClaudeProfileDiscovery.Find();
             if (folder == null) return new([], e.Message);
             var path = Path.Combine(folder, "plan-usage-history.json");
             if (!File.Exists(path)) return new([], e.Message);
@@ -53,8 +50,8 @@ sealed class ClaudeUsageService : IDisposable
     async Task<Snapshot> ReadLive(CancellationToken token)
     {
         if (DateTimeOffset.UtcNow < retryAfter) return new([], "Claude rate limited requests. Retrying after a short pause.");
-        var folder = ClaudeProfileDiscovery.Find(ProfileDirectory);
-        if (folder == null) return new([], "Claude data folder not found. Choose Claude > Data folder from the tray menu.");
+        var folder = ClaudeProfileDiscovery.Find();
+        if (folder == null) return new([], "Claude Desktop data could not be located automatically. Open Claude Desktop and refresh.");
         var identity = ReadIdentity(folder);
         if (identity == null || identity != sessionIdentity) { cachedSession = null; sessionIdentity = identity; }
         var session = cachedSession ??= await Task.Run(() => ReadConnection(folder, identity), token);
@@ -79,7 +76,6 @@ sealed class ClaudeUsageService : IDisposable
         request.Headers.Add("Accept", "application/json");
         request.Headers.UserAgent.ParseAdd("UsageWidget/1.0");
         using var response = await client.SendAsync(request, token);
-        LastHttpStatus = (int)response.StatusCode;
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
         {
             retryAfter = DateTimeOffset.UtcNow.AddMinutes(5);

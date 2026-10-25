@@ -24,7 +24,6 @@ sealed class UsageWidget : Form
 
     public UsageWidget()
     {
-        claude.ProfileDirectory = settings.ClaudeProfileDirectory;
         Text = "Usage";
         AutoScaleMode = AutoScaleMode.Dpi;
         ClientSize = new Size(432, 64);
@@ -81,42 +80,6 @@ sealed class UsageWidget : Form
             providersMenu.DropDownItems.Add(item);
         }
         menu.Items.Add(providersMenu);
-        var claudeMenu = new ToolStripMenuItem("Claude");
-        claudeMenu.DropDownItems.Add("Data folder…", null, async (_, _) =>
-        {
-            using var picker = new FolderBrowserDialog
-            {
-                Description = "Claude data folder", UseDescriptionForTitle = true,
-                SelectedPath = settings.ClaudeProfileDirectory ?? ClaudeProfileDiscovery.Find() ??
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
-            };
-            if (picker.ShowDialog() != DialogResult.OK) return;
-            if (ClaudeProfileDiscovery.Select([picker.SelectedPath]) == null)
-            {
-                MessageBox.Show("Select the Claude data folder containing config.json, Local State or Cookies.", "Claude data folder");
-                return;
-            }
-            settings.ClaudeProfileDirectory = claude.ProfileDirectory = picker.SelectedPath;
-            settings.Save();
-            await RefreshUsage();
-        });
-        claudeMenu.DropDownItems.Add("Use automatic detection", null, async (_, _) =>
-        {
-            settings.ClaudeProfileDirectory = claude.ProfileDirectory = null;
-            settings.Save();
-            await RefreshUsage();
-        });
-        claudeMenu.DropDownItems.Add("Copy diagnostics", null, (_, _) =>
-        {
-            try
-            {
-                Clipboard.SetText(ClaudeProfileDiscovery.DiagnosticReport(settings.ClaudeProfileDirectory, claude.LastHttpStatus));
-                tray.ShowBalloonTip(2500, "Claude", "Diagnostics copied.", ToolTipIcon.Info);
-            }
-            catch (Exception e) when (e is ExternalException or IOException or UnauthorizedAccessException)
-            { tray.ShowBalloonTip(2500, "Claude", "Could not copy diagnostics. Try again.", ToolTipIcon.Error); }
-        });
-        menu.Items.Add(claudeMenu);
         var startup = new ToolStripMenuItem("Start with Windows") { Checked = StartupEnabled(), CheckOnClick = true };
         startup.CheckedChanged += (_, _) =>
         {
@@ -351,12 +314,10 @@ sealed class UsageWidget : Form
 
     void UpdatePin()
     {
-        string message = settings.PositionLocked
-            ? "Position locked. Click to unlock dragging."
-            : "Pin position. Prevents moving the widget when you drag it.";
+        string message = settings.PositionLocked ? "Unlock position" : "Lock position";
         pin.AccessibleName = message;
         pin.Locked = settings.PositionLocked;
-        tips.SetText(pin, settings.PositionLocked ? "Position locked" : "Pin position", message, "Click to toggle - Saved across restarts");
+        tips.SetText(pin, message);
         pin.Invalidate();
     }
 

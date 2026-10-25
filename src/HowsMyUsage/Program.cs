@@ -108,8 +108,8 @@ static class Program
             var configOnly = Path.Combine(folder, "config-only");
             Directory.CreateDirectory(configOnly);
             File.WriteAllText(Path.Combine(configOnly, "config.json"), "{}");
-            if (ClaudeProfileDiscovery.Select([configOnly, folder]) != folder || ClaudeProfileDiscovery.Find(folder) != folder)
-                throw new Exception("A config-only folder must not hide session history; explicit profile overrides must work");
+            if (ClaudeProfileDiscovery.Select([configOnly, folder]) != folder)
+                throw new Exception("A config-only folder must not hide session history");
             var local = Path.Combine(folder, "local");
             var modern = Path.Combine(local, "Claude-Data", "claude_profile");
             Directory.CreateDirectory(modern);
@@ -117,8 +117,6 @@ static class Program
             var candidates = ClaudeProfileDiscovery.Candidates(Path.Combine(folder, "roaming"), local).ToArray();
             if (!candidates.Contains(modern) || ClaudeProfileDiscovery.Select(candidates) != modern)
                 throw new Exception("Claude-Data profiles must be discovered automatically");
-            if (ClaudeProfileDiscovery.DiagnosticReport(modern, null).Contains(folder))
-                throw new Exception("Claude diagnostic reports must not include user paths");
         }
         finally { Directory.Delete(folder, true); }
     }

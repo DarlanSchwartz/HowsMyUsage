@@ -37,7 +37,7 @@ The native uninstaller removes only manifest-listed application files and matchi
 - Gemini: Antigravity quota summary, including its independent Claude/GPT pool in the tooltip.
 - Claude: local Desktop session and history. Cookie locks, encryption changes or provider web protection can prevent live retrieval. Cached readings retain their original capture time.
 
-The Claude diagnostic report excludes paths, account IDs, cookies and response bodies. Do not attach authentication files to issues.
+Claude data discovery is automatic, including modern Claude-Data profiles. There is no manual profile override. Do not attach authentication files to issues.
 
 ## Assets
 

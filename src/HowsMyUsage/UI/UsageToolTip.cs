@@ -42,7 +42,7 @@ sealed class UsageToolTip : IDisposable
         tip.SetToolTip(control, name + "\n" + body + "\n" + contents[control].Footer);
     }
 
-    public void SetText(Control control, string title, string body, string footer)
+    public void SetText(Control control, string title)
     {
         if (!contents.ContainsKey(control))
         {
@@ -53,15 +53,14 @@ sealed class UsageToolTip : IDisposable
                 var anchor = control.PointToScreen(Point.Empty);
                 var area = Screen.FromControl(control).WorkingArea;
                 var point = TooltipPosition(anchor, control.Height, size, area);
-                tip.Show(content.Title + "\\n" + content.Body + "\\n" + content.Footer,
-                    control, control.PointToClient(point), 25000);
+                tip.Show(content.Title, control, control.PointToClient(point), 25000);
             };
             control.MouseLeave += (_, _) => tip.Hide(control);
             control.MouseDown += (_, _) => tip.Hide(control);
             control.VisibleChanged += (_, _) => { if (!control.Visible) tip.Hide(control); };
         }
         tip.Hide(control);
-        contents[control] = new(title, body, footer);
+        contents[control] = new(title, "", "");
     }
 
     internal static Point TooltipPosition(Point anchor, int controlHeight, Size size, Rectangle area)
@@ -75,6 +74,12 @@ sealed class UsageToolTip : IDisposable
     Size Measure(Content content, int dpi)
     {
         int pad = 16 * dpi / 96, width = 350 * dpi / 96;
+        if (content.Body.Length == 0 && content.Footer.Length == 0)
+        {
+            var text = TextRenderer.MeasureText(content.Title, titleFont, Size.Empty,
+                TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+            return new Size(text.Width + 2 * pad, text.Height + 2 * pad);
+        }
         int bodyHeight = TextRenderer.MeasureText(content.Body, bodyFont, new Size(width - 2 * pad, 0), Flags).Height;
         return new Size(width, bodyHeight + 2 * pad + 60 * dpi / 96);
     }
@@ -85,6 +90,13 @@ sealed class UsageToolTip : IDisposable
         graphics.Clear(Color.FromArgb(35, 37, 42));
         using var border = new Pen(Color.FromArgb(70, 73, 80));
         graphics.DrawRectangle(border, 0, 0, bounds.Width - 1, bounds.Height - 1);
+        if (content.Body.Length == 0 && content.Footer.Length == 0)
+        {
+            TextRenderer.DrawText(graphics, content.Title, titleFont,
+                new Rectangle(pad, pad, bounds.Width - 2 * pad, bounds.Height - 2 * pad), Color.WhiteSmoke,
+                TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+            return;
+        }
         TextRenderer.DrawText(graphics, content.Title, titleFont, new Rectangle(pad, pad, bounds.Width - 2 * pad, heading), Color.WhiteSmoke, Flags);
         TextRenderer.DrawText(graphics, content.Body, bodyFont, new Rectangle(pad, pad + heading, bounds.Width - 2 * pad, bounds.Height - 2 * pad - heading - footer), Color.FromArgb(210, 214, 222), Flags);
         int y = bounds.Height - pad - footer;

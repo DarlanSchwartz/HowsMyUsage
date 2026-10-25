@@ -12,7 +12,7 @@ A native Windows widget showing your remaining Codex, Gemini and Claude usage.
 
 ## Install
 
-1. Download HowsMyUsage-1.2.0-Setup.exe and open it.
+1. Download HowsMyUsage-1.2.1-Setup.exe and open it.
 2. Choose the folder and shortcut options, then click **Install**.
 3. Click **Open HowsMyUsage**.
 
@@ -41,7 +41,7 @@ Percentages show remaining usage and refresh every two minutes.
 | Claude | Signed-in Claude Desktop |
 
 A dash means usage is unavailable. Gray values may be cached; hover for details.
-For Claude detection problems, use **Claude > Data folder** or **Copy diagnostics** in the tray menu.
+Claude Desktop data is detected automatically.
 
 ## Privacy
 
@@ -49,10 +49,6 @@ No analytics or telemetry. The widget reads existing local sign-ins and requests
 Saved Claude connections are encrypted with Windows DPAPI.
 
 ## Screenshots
-
-![Widget with one provider](docs/providers-one.png)
-
-![Widget with two providers](docs/providers-two.png)
 
 ![Large widget](docs/widget-large-aligned.png)
 
