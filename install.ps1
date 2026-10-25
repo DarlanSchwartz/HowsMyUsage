@@ -5,9 +5,8 @@ param(
     [switch]$NoLaunch
 )
 $ErrorActionPreference = 'Stop'
-if (!$InstallDir) { $InstallDir = Read-Host 'Install folder on a non-system drive (for example D:\Apps\HowsMyUsage)' }
+if (!$InstallDir) { $InstallDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\HowsMyUsage' }
 $InstallDir = [IO.Path]::GetFullPath($InstallDir)
-if ([IO.Path]::GetPathRoot($InstallDir) -eq 'C:\') { throw 'Choose a drive other than C:.' }
 $source = Join-Path $PSScriptRoot 'app'
 if (!(Test-Path (Join-Path $source 'Usage.exe'))) { throw 'Extract the complete release ZIP before running the installer.' }
 if ($InstallDir.TrimEnd('\') -eq $source.TrimEnd('\')) { throw 'Choose a different destination from the extracted app folder.' }

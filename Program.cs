@@ -7,11 +7,6 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
-        if (WidgetSettings.IsSystemDrive(AppContext.BaseDirectory))
-        {
-            MessageBox.Show("Move Usage to a drive other than C: before starting.", "Usage");
-            return;
-        }
         var temp = Path.Combine(AppContext.BaseDirectory, "temp");
         Directory.CreateDirectory(temp);
         Environment.SetEnvironmentVariable("TEMP", temp);
@@ -39,7 +34,7 @@ static class Program
             """);
         var parsed = Providers.ParseAntigravity(gemini.RootElement);
         if (parsed.Quotas.Count != 4 || parsed.Remaining != 97 ||
-            !parsed.Quotas.Any(q => q.Name == "Claude / GPT · Weekly" && q.Remaining == 39))
+            !parsed.Quotas.Any(q => q.Name == "Claude / GPT Â· Weekly" && q.Remaining == 39))
             throw new Exception("Antigravity must select Gemini weekly and retain both pools for details");
         using var sessionQuota = JsonDocument.Parse("""
             {"response":{"groups":[{"buckets":[{"bucketId":"gemini-5h","window":"5h","remainingFraction":1}]}]}}

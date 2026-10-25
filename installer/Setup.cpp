@@ -6,6 +6,7 @@
 #include <uxtheme.h>
 #include <commctrl.h>
 #include <shobjidl.h>
+#include <shlobj.h>
 #include <shellapi.h>
 #include <setupapi.h>
 #include <filesystem>
@@ -67,10 +68,10 @@ public:
         fs::path path = fs::absolute(fs::path(value)).lexically_normal();
         auto root = path.root_name().wstring();
         std::transform(root.begin(), root.end(), root.begin(), towupper);
-        if (root.size() != 2 || root[0] == L'C' || root[1] != L':' || path == path.root_path())
-            throw std::runtime_error("Choose an application folder on a drive other than C:.");
+        if (root.size() != 2 || root[1] != L':' || path == path.root_path())
+            throw std::runtime_error("Choose an application folder, not the root of a drive.");
         if (path.native().size() > 160) throw std::runtime_error("Choose a shorter installation path.");
-        // A junction can redirect an apparently safe path onto the system drive.
+        // Avoid overwriting files through an unexpected junction or symbolic link.
         for (auto parent = path; !parent.empty(); parent = parent.parent_path()) {
             DWORD attributes = GetFileAttributesW(parent.c_str());
             if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT))
@@ -143,14 +144,11 @@ class SetupWindow {
         wchar_t previous[MAX_PATH]; DWORD size = sizeof(previous);
         if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\HowsMyUsage", L"InstallDir", RRF_RT_REG_SZ, nullptr, previous, &size) == ERROR_SUCCESS)
             return previous;
-        wchar_t module[MAX_PATH]; GetModuleFileNameW(nullptr, module, MAX_PATH);
-        auto root = fs::path(module).root_path();
-        if (towupper(root.native()[0]) != L'C') return (root / L"Softwares" / L"HowsMyUsage").wstring();
-        for (wchar_t drive = L'D'; drive <= L'Z'; drive++) {
-            std::wstring candidate{drive, L':', L'\\'};
-            if (GetDriveTypeW(candidate.c_str()) == DRIVE_FIXED) return candidate + L"Softwares\\HowsMyUsage";
-        }
-        return L"";
+        PWSTR local = nullptr;
+        if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &local))) return L"";
+        auto folder = fs::path(local) / L"Programs" / L"HowsMyUsage";
+        CoTaskMemFree(local);
+        return folder.wstring();
     }
     void ChooseFolder() {
         IFileOpenDialog* picker = nullptr;

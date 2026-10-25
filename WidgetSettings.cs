@@ -29,7 +29,6 @@ sealed class WidgetSettings
     }
     static string FilePath => Path.Combine(AppContext.BaseDirectory, "widget-settings.json");
 
-    public static bool IsSystemDrive(string path) => string.Equals(Path.GetPathRoot(Path.GetFullPath(path)), "C:\\", StringComparison.OrdinalIgnoreCase);
     public static WidgetSettings Load()
     {
         try { return JsonSerializer.Deserialize<WidgetSettings>(File.ReadAllText(FilePath)) ?? new(); }
@@ -37,7 +36,6 @@ sealed class WidgetSettings
     }
     public void Save()
     {
-        if (IsSystemDrive(FilePath)) return;
         try
         {
             File.WriteAllText(FilePath + ".tmp", JsonSerializer.Serialize(this));

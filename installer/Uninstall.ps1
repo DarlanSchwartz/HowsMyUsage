@@ -1,6 +1,5 @@
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath($PSScriptRoot)
-if ([IO.Path]::GetPathRoot($root) -eq 'C:\') { throw 'Uninstall is not allowed on C:.' }
 $exe = Join-Path $root 'Usage.exe'
 if (Get-Process Usage -ErrorAction SilentlyContinue | Where-Object Path -EQ $exe) { throw 'Exit HowsMyUsage from the tray before uninstalling.' }
 $files = Get-Content -LiteralPath (Join-Path $root 'install-files.json') -Raw | ConvertFrom-Json

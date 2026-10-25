@@ -1,6 +1,5 @@
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
-if ([IO.Path]::GetPathRoot($PSScriptRoot) -eq 'C:\') { throw 'Execute o projeto fora do C:.' }
 $buildRoot = Join-Path $PSScriptRoot '.build'
 foreach ($folder in 'temp','cli','packages','http') { New-Item -ItemType Directory -Force (Join-Path $buildRoot $folder) | Out-Null }
 $env:TEMP = Join-Path $buildRoot 'temp'

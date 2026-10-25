@@ -115,8 +115,8 @@ Startup uses the current user's **UsageWidget** Run registry entry and a hidden 
 
 ## Install
 
-1. Download **HowsMyUsage-1.1.0-Setup.exe** from [Releases](https://github.com/DarlanSchwartz/HowsMyUsage/releases/latest).
-2. Open it and choose a writable application folder on a drive other than C:.
+1. Download **HowsMyUsage-1.1.1-Setup.exe** from [Releases](https://github.com/DarlanSchwartz/HowsMyUsage/releases/latest).
+2. Open it and choose a writable application folder. New installations default to %LOCALAPPDATA%\Programs\HowsMyUsage, normally on C:. Any local drive is supported.
 3. Choose whether to start with Windows, then click **Install**.
 4. Click **Open HowsMyUsage**. No administrator access or separate .NET installation required.
 
@@ -124,7 +124,7 @@ Updates preserve the widget's preferences and encrypted Claude connection. Exit 
 
 **Uninstall:** use Windows **Installed apps → HowsMyUsage → Uninstall**, or run `Uninstall.ps1` from the installation folder. Exit the widget first. Packaged files and its matching startup entry are removed; local preferences and encrypted connections are preserved. Delete those remaining files yourself if you no longer need them.
 
-**Portable / script installer:** download and extract **HowsMyUsage-1.1.0-win-x64.zip**. Run **app\Usage.exe** directly, or double-click **Install.cmd** to copy the app to another folder.
+**Portable / script installer:** download and extract **HowsMyUsage-1.1.1-win-x64.zip**. Run **app\Usage.exe** directly, or double-click **Install.cmd** to copy the app to another folder.
 
 For a Desktop shortcut and automatic startup, open PowerShell in the extracted folder:
 
@@ -132,11 +132,11 @@ For a Desktop shortcut and automatic startup, open PowerShell in the extracted f
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -InstallDir 'D:\Apps\HowsMyUsage' -DesktopShortcut -StartWithWindows
 ~~~
 
-The shortcut option explicitly permits writing to the Windows Desktop, which may be on C:. App files, settings and app-owned temporary files remain beside the executable. The app deliberately refuses to run from C:.
+The shortcut option explicitly permits writing to the Windows Desktop, which may be on C:. App files, settings and app-owned temporary files remain beside the executable. Installation, startup, saved preferences and encrypted Claude connections work on C: as well as other drives.
 
 The installer is unsigned; Windows may show its standard download warning. Download only from this repository's releases. SHA-256 checksum files accompany releases.
 
-Keep the complete app folder together. For unattended installation: `HowsMyUsage-1.1.0-Setup.exe /S /D=D:\Apps\HowsMyUsage` (add `/STARTUP` to enable automatic startup).
+Keep the complete app folder together. For unattended installation: `HowsMyUsage-1.1.1-Setup.exe /S /D=D:\Apps\HowsMyUsage` (add `/STARTUP` to enable automatic startup).
 
 ## Setup and limitations
 
@@ -152,7 +152,7 @@ A dash means no usable quota. Gray values can indicate a cached reading or sourc
 
 ## Privacy
 
-No application analytics or telemetry is implemented. Authentication is read locally; you do not paste credentials into the widget. Claude session values are sent only to claude.ai. The saved connection, `claude-session.bin`, is encrypted with Windows DPAPI for the current Windows user, stored beside the executable on a non-system drive, and excluded from Git and release packages. Delete that file to remove the saved connection. Secrets are not written to settings or diagnostics. Queries retrieve status rather than generate model responses. Provider applications retain their own storage and logging behavior.
+No application analytics or telemetry is implemented. Authentication is read locally; you do not paste credentials into the widget. Claude session values are sent only to claude.ai. The saved connection, `claude-session.bin`, is encrypted with Windows DPAPI for the current Windows user, stored beside the executable, and excluded from Git and release packages. Delete that file to remove the saved connection. Secrets are not written to settings or diagnostics. Queries retrieve status rather than generate model responses. Provider applications retain their own storage and logging behavior.
 
 Never attach cookies, authentication files or unredacted account responses to issues.
 
@@ -164,7 +164,7 @@ Never attach cookies, authentication files or unredacted account responses to is
 
 ## Build
 
-Requires Windows x64 and the .NET 10 SDK. Clone to a drive other than C:.
+Requires Windows x64 and the .NET 10 SDK.
 
 ~~~powershell
 git clone https://github.com/DarlanSchwartz/HowsMyUsage.git D:\Projects\HowsMyUsage
@@ -182,7 +182,7 @@ Start-Process .\dist\widget\Usage.exe -ArgumentList '--check' -Wait
 Start-Process .\dist\widget\Usage.exe -ArgumentList '--check-widget' -Wait
 # Package the custom installer, portable ZIP and SHA-256 checksums:
 # Requires Visual Studio C++ x64 build tools and the Windows SDK.
-.\package.ps1 -Version 1.1.0
+.\package.ps1 -Version 1.1.1
 ~~~
 
 Checks write to artifacts. Source unavailability is separate from parser checks. Packaging uses the publish manifest, excludes debug symbols and does not package local settings, credentials, caches or diagnostics.

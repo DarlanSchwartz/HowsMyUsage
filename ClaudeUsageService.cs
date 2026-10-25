@@ -17,7 +17,6 @@ sealed class ClaudeUsageService : IDisposable
     // Diagnostics only: stage, status and short response snippets. Never session values.
     static void Log(string message)
     {
-        if (WidgetSettings.IsSystemDrive(LogPath)) return;
         try
         {
             var lines = File.Exists(LogPath) ? File.ReadAllLines(LogPath).TakeLast(300).ToList() : [];
@@ -142,16 +141,13 @@ sealed class ClaudeUsageService : IDisposable
         var bytes = JsonSerializer.SerializeToUtf8Bytes(new SavedSession(identity, session.SessionKey, session.Organization));
         try
         {
-            if (!WidgetSettings.IsSystemDrive(ConnectionPath))
+            var encrypted = ClaudeDesktopSession.Protect(bytes);
+            try
             {
-                var encrypted = ClaudeDesktopSession.Protect(bytes);
-                try
-                {
-                    File.WriteAllBytes(ConnectionPath + ".tmp", encrypted);
-                    File.Move(ConnectionPath + ".tmp", ConnectionPath, true);
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+                File.WriteAllBytes(ConnectionPath + ".tmp", encrypted);
+                File.Move(ConnectionPath + ".tmp", ConnectionPath, true);
             }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
         finally { CryptographicOperations.ZeroMemory(bytes); }
         return session;
@@ -159,7 +155,6 @@ sealed class ClaudeUsageService : IDisposable
 
     static void ForgetConnection()
     {
-        if (WidgetSettings.IsSystemDrive(ConnectionPath)) return;
         try { File.Delete(ConnectionPath); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
