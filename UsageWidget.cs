@@ -63,6 +63,23 @@ sealed class UsageWidget : Form
             sizeMenu.DropDownItems.Add(item);
         }
         menu.Items.Add(sizeMenu);
+        var providersMenu = new ToolStripMenuItem("Providers");
+        foreach (var (name, index) in new[] { ("Codex", 0), ("Gemini", 1), ("Claude", 2) })
+        {
+            var item = new ToolStripMenuItem(name) { Checked = settings.ProviderEnabled(index) };
+            item.Click += async (_, _) =>
+            {
+                settings.SetProviderEnabled(index, !settings.ProviderEnabled(index));
+                item.Checked = settings.ProviderEnabled(index);
+                LayoutReadings();
+                if (Enumerable.Range(0, 3).Any(settings.ProviderEnabled)) { Show(); ApplyWindowMode(); }
+                else Hide();
+                SavePosition();
+                await RefreshUsage();
+            };
+            providersMenu.DropDownItems.Add(item);
+        }
+        menu.Items.Add(providersMenu);
         var startup = new ToolStripMenuItem("Start with Windows") { Checked = StartupEnabled(), CheckOnClick = true };
         startup.CheckedChanged += (_, _) =>
         {
@@ -127,6 +144,7 @@ sealed class UsageWidget : Form
             ApplyWindowMode();
             timer.Start();
             await RefreshUsage();
+            if (!Enumerable.Range(0, 3).Any(settings.ProviderEnabled)) Hide();
             if (Environment.GetCommandLineArgs().Contains("--check-widget"))
             {
                 Directory.CreateDirectory("artifacts");
@@ -147,6 +165,29 @@ sealed class UsageWidget : Form
                             TextFormatFlags.NoPadding).Width <= value.Width) });
                 }
                 settings.Size = originalSize;
+                LayoutReadings();
+                var originalProviders = Enumerable.Range(0, 3).Select(settings.ProviderEnabled).ToArray();
+                var providerChecks = new List<object>();
+                for (int mask = 0; mask < 8; mask++)
+                {
+                    for (int i = 0; i < 3; i++) settings.SetProviderEnabled(i, (mask & (1 << i)) != 0);
+                    LayoutReadings();
+                    settings.Save();
+                    var saved = WidgetSettings.Load();
+                    bool passed = Enumerable.Range(0, 3).All(i => saved.ProviderEnabled(i) == settings.ProviderEnabled(i) &&
+                        values[i].Visible == settings.ProviderEnabled(i) && pictures[i].Visible == settings.ProviderEnabled(i));
+                    var visible = Enumerable.Range(0, 3).Where(settings.ProviderEnabled).ToArray();
+                    passed &= visible.All(i => values[i].Right <= ClientSize.Width && pictures[i].Left >= 0);
+                    if (mask is 1 or 3)
+                    {
+                        using var selection = new Bitmap(ClientSize.Width, ClientSize.Height);
+                        DrawToBitmap(selection, ClientRectangle);
+                        selection.Save($"artifacts/providers-{visible.Length}.png");
+                    }
+                    providerChecks.Add(new { mask, passed, width = Width });
+                }
+                for (int i = 0; i < 3; i++) settings.SetProviderEnabled(i, originalProviders[i]);
+                settings.Save();
                 LayoutReadings();
                 tips.SavePreview(values[1], "artifacts/tooltip-preview.png");
                 for (int i = 0; i < names.Length; i++)
@@ -218,7 +259,7 @@ sealed class UsageWidget : Form
                             return area.Contains(VisibleBounds(corrected));
                         });
                     }),
-                    workAreaPassed, pinPassed, sizeChecks, selectedSize = settings.Size, topModePassed, desktopModePassed, desktopAttached = desktop.IsAttached(this), topMost = TopMost, showInTaskbar = ShowInTaskbar,
+                    workAreaPassed, pinPassed, sizeChecks, providerChecks, selectedSize = settings.Size, topModePassed, desktopModePassed, desktopAttached = desktop.IsAttached(this), topMost = TopMost, showInTaskbar = ShowInTaskbar,
                     logos = logos.Count, position = PointToScreen(Point.Empty), roundedCorners = Region != null && !Region.IsVisible(0, 0) && Region.IsVisible(Width / 2, Height / 2)
                 }));
                 Close();
@@ -244,10 +285,14 @@ sealed class UsageWidget : Form
             Size.Empty, TextFormatFlags.NoPadding).Width + (int)(4 * scale)).ToArray();
         int top = (int)(18 * DeviceDpi / 96f), right = (int)(10 * DeviceDpi / 96f);
         int bodyHeight = (int)(64 * scale);
-        ClientSize = new Size(2 * margin + 2 * cellGap + widths.Sum() + 3 * (icon + gap) + right, bodyHeight + top);
+        var enabled = Enumerable.Range(0, values.Length).Where(settings.ProviderEnabled).ToArray();
+        ClientSize = new Size(2 * margin + Math.Max(0, enabled.Length - 1) * cellGap +
+            enabled.Sum(i => widths[i] + icon + gap) + right, bodyHeight + top);
         int x = margin;
         for (int i = 0; i < values.Length; i++)
         {
+            pictures[i].Visible = values[i].Visible = settings.ProviderEnabled(i);
+            if (!settings.ProviderEnabled(i)) continue;
             pictures[i].Bounds = new Rectangle(x, top + (bodyHeight - icon) / 2, icon, icon);
             values[i].Bounds = new Rectangle(x + icon + gap, top, widths[i], bodyHeight);
             x += icon + gap + widths[i] + cellGap;
@@ -338,6 +383,7 @@ sealed class UsageWidget : Form
 
     void ToggleWidget()
     {
+        if (!Enumerable.Range(0, 3).Any(settings.ProviderEnabled)) return;
         if (Visible) Hide();
         else { Show(); ApplyWindowMode(); }
     }
@@ -371,6 +417,7 @@ sealed class UsageWidget : Form
 
         async Task UpdateProvider(int i, Func<CancellationToken, Task<Snapshot>> fetch)
         {
+            if (!settings.ProviderEnabled(i)) return;
             var result = await Program.Safe(fetch, timeout.Token);
             if (IsDisposed || lifetime.IsCancellationRequested) return;
             values[i].Text = result.Remaining is double p ? $"{Math.Floor(p):0}%" : "—";

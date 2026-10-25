@@ -12,6 +12,18 @@ Just icons and remaining percentages, with rounded corners and no outline. Drag 
 
 ## See it in action
 
+### Choose your providers
+
+Right-click the tray icon or widget → **Providers**. Toggle Codex, Gemini and Claude independently. Disabled providers disappear and stop being queried. The widget adjusts its width and remembers the selection. Turn all three off to keep only the tray icon; enable a provider from the tray menu to bring the widget back.
+
+![Widget with one provider](docs/providers-one.png)
+
+![Widget with two providers](docs/providers-two.png)
+
+### Simple setup
+
+Choose a folder, optionally enable **Start with Windows**, then click **Install**. The setup uses a native Windows interface and includes the .NET runtime.
+
 ### Three widget sizes
 
 Right-click the widget or tray icon → **Widget size** → **Large**, **Medium**, or **Small**. Icons, text and spacing scale together, and the choice is saved across restarts. Tooltips stay readable at their normal size.
@@ -74,13 +86,13 @@ Weekly readings come from Antigravity's quota-summary endpoint. If weekly data i
 
 ![Claude weekly usage tooltip with cached status](docs/tooltip-claude.png)
 
-Claude shows the weekly all-model allowance. This example is a cached reading; the tooltip makes its age and unavailable live refresh explicit.
+Claude shows the weekly all-model allowance. The tooltip also includes the five-hour session and separate model allowances, including Fable, when Claude returns them. This example is a cached reading; the tooltip makes its age and unavailable live refresh explicit.
 
 ### Context menu
 
 ![Widget and tray context menu](docs/context-menu-sizes.png)
 
-Refresh immediately, choose Widget size, switch Always on top, start with Windows, or exit—all from the same right-click menu.
+Refresh immediately, choose providers and widget size, switch Always on top, start with Windows, or exit—all from the same right-click menu.
 
 ### Windows system tray
 
@@ -96,17 +108,23 @@ Screenshots include application-rendered previews and actual Windows captures. V
 - Hover the widget to reveal the top-right pin. Click to lock its position and prevent dragging; click again to unlock. The tooltip explains the current state, and the lock persists across restarts.
 - Hover an icon or percentage for limits, reset times and last check time.
 - Left-click the tray icon to show or hide.
-- Right-click for Refresh, Widget size, Always on top, Start with Windows, and Exit.
+- Right-click for Refresh, Providers, Widget size, Always on top, Start with Windows, and Exit.
 - **Always on top** is saved across restarts. Turn it off to return to desktop-only mode.
 
 Startup uses the current user's **UsageWidget** Run registry entry and a hidden PowerShell launcher. It waits 15 seconds for the desktop, retries failed starts and writes **startup.log** beside the app. Keep the installation drive available at sign-in. No service or scheduled task is installed.
 
 ## Install
 
-1. Download **HowsMyUsage-1.0.3-win-x64.zip** from [Releases](https://github.com/DarlanSchwartz/HowsMyUsage/releases/latest).
-2. Extract the entire ZIP to a writable folder on a drive other than C:.
-3. Double-click **Install.cmd** and enter a destination such as **D:\Apps\HowsMyUsage**.
-4. The installer copies the application and opens it. No administrator access or separate .NET installation required.
+1. Download **HowsMyUsage-1.1.0-Setup.exe** from [Releases](https://github.com/DarlanSchwartz/HowsMyUsage/releases/latest).
+2. Open it and choose a writable application folder on a drive other than C:.
+3. Choose whether to start with Windows, then click **Install**.
+4. Click **Open HowsMyUsage**. No administrator access or separate .NET installation required.
+
+Updates preserve the widget's preferences and encrypted Claude connection. Exit the running widget from its tray menu before updating. Setup scratch files stay on the installation drive and are removed when setup finishes. No Desktop or Start menu shortcut is created by the graphical installer.
+
+**Uninstall:** use Windows **Installed apps → HowsMyUsage → Uninstall**, or run `Uninstall.ps1` from the installation folder. Exit the widget first. Packaged files and its matching startup entry are removed; local preferences and encrypted connections are preserved. Delete those remaining files yourself if you no longer need them.
+
+**Portable / script installer:** download and extract **HowsMyUsage-1.1.0-win-x64.zip**. Run **app\Usage.exe** directly, or double-click **Install.cmd** to copy the app to another folder.
 
 For a Desktop shortcut and automatic startup, open PowerShell in the extracted folder:
 
@@ -118,7 +136,7 @@ The shortcut option explicitly permits writing to the Windows Desktop, which may
 
 The installer is unsigned; Windows may show its standard download warning. Download only from this repository's releases. SHA-256 checksum files accompany releases.
 
-**Portable:** run **app\Usage.exe** directly from the extracted folder. Keep the complete app folder together.
+Keep the complete app folder together. For unattended installation: `HowsMyUsage-1.1.0-Setup.exe /S /D=D:\Apps\HowsMyUsage` (add `/STARTUP` to enable automatic startup).
 
 ## Setup and limitations
 
@@ -126,13 +144,15 @@ The installer is unsigned; Windows may show its standard download warning. Downl
 
 **Gemini / Antigravity:** open Antigravity and sign in. The widget reads the local language server's RetrieveUserQuotaSummary endpoint. Older versions without weekly summary support must be updated. The Gemini indicator uses only Gemini's weekly pool; the tooltip also includes the independent Claude/GPT pool and both five-hour windows.
 
-**Claude:** the widget attempts to read Desktop's existing session in read-only mode and query usage. Desktop may lock its cookie database; unsupported cookie encryption can also prevent connection. If convenient, fully exit Claude Desktop, refresh the widget, then reopen Claude. Otherwise the widget may use a cached weekly reading from local history. The tooltip identifies cached readings and their original time. **Last checked is the query time, not proof that cached data is fresh.** Live Claude retrieval has not been validated on every Desktop version.
+**Claude:** the widget attempts to read Desktop's existing session in read-only mode and query usage. Desktop may lock its cookie database; unsupported cookie encryption can also prevent connection. For the first connection, if convenient, fully exit Claude Desktop, refresh the widget, then reopen Claude. A successful connection is saved with Windows DPAPI encryption beside the executable and matched to the Desktop account, so subsequent refreshes can reuse it while Desktop is open. Otherwise the widget may use cached weekly and session readings from local history; separate model limits such as Fable require the live response. The tooltip identifies cached readings and their original time. **Last checked is the query time, not proof that cached data is fresh.** Live Claude retrieval has not been validated on every Desktop version.
+
+**Codex session limits:** the tooltip includes a session allowance when the account's usage response supplies one. An absent session limit is not substituted or inferred from the subscription tier.
 
 A dash means no usable quota. Gray values can indicate a cached reading or source error. Provider endpoints and local storage formats may change. This unofficial tool is not affiliated with OpenAI, Google or Anthropic.
 
 ## Privacy
 
-No application analytics or telemetry is implemented. Authentication is read locally; you do not paste credentials into the widget. Claude session values are held in memory and sent only to claude.ai. Secrets are not intentionally written to settings or diagnostics. Queries retrieve status rather than generate model responses. Provider applications retain their own storage and logging behavior.
+No application analytics or telemetry is implemented. Authentication is read locally; you do not paste credentials into the widget. Claude session values are sent only to claude.ai. The saved connection, `claude-session.bin`, is encrypted with Windows DPAPI for the current Windows user, stored beside the executable on a non-system drive, and excluded from Git and release packages. Delete that file to remove the saved connection. Secrets are not written to settings or diagnostics. Queries retrieve status rather than generate model responses. Provider applications retain their own storage and logging behavior.
 
 Never attach cookies, authentication files or unredacted account responses to issues.
 
@@ -160,8 +180,9 @@ Build caches and temporary files are redirected to .build inside the repo. Self-
 Start-Process .\dist\widget\Usage.exe -ArgumentList '--check' -Wait
 # Exit the running widget first; render previews and verify desktop hosting:
 Start-Process .\dist\widget\Usage.exe -ArgumentList '--check-widget' -Wait
-# Package ZIP and SHA-256 checksum:
-.\package.ps1 -Version 1.0.3
+# Package the custom installer, portable ZIP and SHA-256 checksums:
+# Requires Visual Studio C++ x64 build tools and the Windows SDK.
+.\package.ps1 -Version 1.1.0
 ~~~
 
 Checks write to artifacts. Source unavailability is separate from parser checks. Packaging uses the publish manifest, excludes debug symbols and does not package local settings, credentials, caches or diagnostics.

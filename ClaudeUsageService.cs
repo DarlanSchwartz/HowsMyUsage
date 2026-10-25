@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.Security.Cryptography;
 
 namespace Usage;
 
@@ -8,6 +9,23 @@ sealed class ClaudeUsageService : IDisposable
     readonly HttpClient client = new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(15) };
     DateTimeOffset retryAfter;
     (string SessionKey, string? Organization)? cachedSession;
+    string? sessionIdentity;
+    sealed record SavedSession(string Identity, string SessionKey, string? Organization);
+    static string ConnectionPath => Path.Combine(AppContext.BaseDirectory, "claude-session.bin");
+    static string LogPath => Path.Combine(AppContext.BaseDirectory, "claude.log");
+
+    // Diagnostics only: stage, status and short response snippets. Never session values.
+    static void Log(string message)
+    {
+        if (WidgetSettings.IsSystemDrive(LogPath)) return;
+        try
+        {
+            var lines = File.Exists(LogPath) ? File.ReadAllLines(LogPath).TakeLast(300).ToList() : [];
+            lines.Add($"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss} {message}");
+            File.WriteAllLines(LogPath, lines);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
 
     public static string? FindProfile()
     {
@@ -21,9 +39,15 @@ sealed class ClaudeUsageService : IDisposable
 
     public async Task<Snapshot> Read(CancellationToken token)
     {
-        try { return await ReadLive(token); }
-        catch (Exception e) when (e is InvalidOperationException or IOException or System.Security.Cryptography.CryptographicException or HttpRequestException)
+        try
         {
+            var live = await ReadLive(token);
+            Log($"live ok: {string.Join(", ", live.Quotas.Select(q => $"{q.Name}={q.Remaining:0}"))}{(live.Error is { } err ? " | " + err : "")}");
+            return live;
+        }
+        catch (Exception e) when (e is InvalidOperationException or IOException or UnauthorizedAccessException or JsonException or CryptographicException or HttpRequestException)
+        {
+            Log($"live failed ({e.GetType().Name}): {e.Message} | saved connection: {(File.Exists(ConnectionPath) ? "yes" : "no")}, in memory: {(cachedSession != null ? "yes" : "no")}");
             var folder = FindProfile();
             if (folder == null) return new([], e.Message);
             var path = Path.Combine(folder, "plan-usage-history.json");
@@ -39,7 +63,9 @@ sealed class ClaudeUsageService : IDisposable
         if (DateTimeOffset.UtcNow < retryAfter) return new([], "Claude rate limited requests. Retrying after a short pause.");
         var folder = FindProfile();
         if (folder == null) return new([], "Sign in to Claude Desktop first.");
-        var session = cachedSession ??= await Task.Run(() => ClaudeDesktopSession.Read(folder), token);
+        var identity = ReadIdentity(folder);
+        if (identity != sessionIdentity) { cachedSession = null; sessionIdentity = identity; }
+        var session = cachedSession ??= await Task.Run(() => ReadConnection(folder, identity), token);
         var organization = session.Organization;
         if (organization == null)
         {
@@ -68,38 +94,125 @@ sealed class ClaudeUsageService : IDisposable
             if (response.Headers.RetryAfter?.Delta is { } delta && DateTimeOffset.UtcNow + delta > retryAfter) retryAfter = DateTimeOffset.UtcNow + delta;
             throw new InvalidOperationException("Claude rate limited requests. Retrying after a short pause.");
         }
-        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        var body = await response.Content.ReadAsStringAsync(token);
+        if (!response.IsSuccessStatusCode)
         {
-            cachedSession = null;
-            throw new InvalidOperationException($"Claude rejected the usage request (HTTP {(int)response.StatusCode}). Open Claude Desktop and check your sign-in.");
+            var snippet = new string(body.Take(160).Select(c => char.IsControl(c) ? ' ' : c).ToArray());
+            bool cloudflare = response.Headers.Contains("cf-mitigated") || body.Contains("challenge-platform") || body.Contains("Just a moment");
+            Log($"GET {path.Split('?')[0]} -> HTTP {(int)response.StatusCode}{(cloudflare ? " (Cloudflare challenge)" : "")}: {snippet}");
+            // Only a 401 proves the session is dead. A 403 is often Cloudflare or a transient block;
+            // deleting the saved session then forces a cookie read, which fails while Desktop is open.
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                cachedSession = null;
+                ForgetConnection();
+                throw new InvalidOperationException("Claude rejected the saved sign-in (HTTP 401). Exit Claude Desktop briefly, then refresh Usage to reconnect.");
+            }
+            throw new InvalidOperationException(cloudflare
+                ? $"Claude's web protection blocked the usage request (HTTP {(int)response.StatusCode}). Keeping the saved sign-in and retrying."
+                : $"Claude usage unavailable (HTTP {(int)response.StatusCode}). Keeping the saved sign-in and retrying.");
         }
-        if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"Claude usage unavailable (HTTP {(int)response.StatusCode}).");
-        return JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
+        return JsonDocument.Parse(body);
+    }
+
+    static string ReadIdentity(string folder)
+    {
+        using var config = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, "config.json")));
+        var account = String(config.RootElement, "lastKnownAccountUuid");
+        if (string.IsNullOrWhiteSpace(account)) throw new InvalidOperationException("Claude account identity unavailable. Open Claude Desktop and sign in.");
+        return folder + "|" + account;
+    }
+
+    static (string SessionKey, string? Organization) ReadConnection(string folder, string identity)
+    {
+        try
+        {
+            var clear = ClaudeDesktopSession.Unprotect(File.ReadAllBytes(ConnectionPath));
+            try
+            {
+                var saved = JsonSerializer.Deserialize<SavedSession>(clear);
+                if (saved?.Identity == identity && !string.IsNullOrWhiteSpace(saved.SessionKey))
+                    return (saved.SessionKey, saved.Organization);
+            }
+            finally { CryptographicOperations.ZeroMemory(clear); }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or CryptographicException) { }
+        var session = ClaudeDesktopSession.Read(folder);
+        Log("read sign-in from Claude Desktop cookies; saving connection");
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(new SavedSession(identity, session.SessionKey, session.Organization));
+        try
+        {
+            if (!WidgetSettings.IsSystemDrive(ConnectionPath))
+            {
+                var encrypted = ClaudeDesktopSession.Protect(bytes);
+                try
+                {
+                    File.WriteAllBytes(ConnectionPath + ".tmp", encrypted);
+                    File.Move(ConnectionPath + ".tmp", ConnectionPath, true);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            }
+        }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
+        return session;
+    }
+
+    static void ForgetConnection()
+    {
+        if (WidgetSettings.IsSystemDrive(ConnectionPath)) return;
+        try { File.Delete(ConnectionPath); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
     public static Snapshot Parse(JsonElement root)
     {
         List<Quota> quotas = [];
+        if (root.ValueKind != JsonValueKind.Object) return new([], "Claude returned an invalid usage response.");
         if (root.TryGetProperty("limits", out var limits) && limits.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in limits.EnumerateArray())
             {
                 if (item.ValueKind != JsonValueKind.Object) continue;
-                var name = item.TryGetProperty("kind", out var kind) ? kind.GetString() ?? "Limit" : "Limit";
-                if (name == "weekly_all") Add(item, "percent", "Weekly \u00b7 all models");
+                string? kind = String(item, "kind"), group = String(item, "group");
+                bool primary = kind == "weekly_all";
+                string? name = primary ? "Weekly - all models" : kind == "session" ? "Session - 5 hours" : null;
+                if (name == null && item.TryGetProperty("scope", out var scope) && scope.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var field in new[] { "model", "surface" })
+                        if (scope.TryGetProperty(field, out var product) && product.ValueKind == JsonValueKind.Object &&
+                            String(product, "display_name") is { } display)
+                        { name = (group == "weekly" ? "Weekly - " : "") + display; break; }
+                }
+                if (name != null) Add(item, "percent", name, primary);
             }
         }
-        if (quotas.Count == 0 && root.TryGetProperty("seven_day", out var window) && window.ValueKind == JsonValueKind.Object)
-            Add(window, "utilization", "Weekly \u00b7 all models");
-        return new(quotas, quotas.Count == 0 ? "Claude did not return the weekly limit." : null, DateTimeOffset.UtcNow);
+        // Legacy fields supplement missing entries, without replacing the weekly main indicator.
+        Legacy("seven_day", "Weekly - all models", true);
+        Legacy("five_hour", "Session - 5 hours", false);
+        Legacy("seven_day_fable", "Weekly - Fable", false);
+        Legacy("seven_day_opus", "Weekly - Opus", false);
+        Legacy("seven_day_sonnet", "Weekly - Sonnet", false);
+        return new(quotas, quotas.Any(q => q.IncludeInSummary) ? null : "Claude did not return the weekly limit.", DateTimeOffset.UtcNow);
 
-        void Add(JsonElement window, string key, string name)
+        void Legacy(string field, string label, bool primary)
         {
-            if (!window.TryGetProperty(key, out var used) || used.ValueKind != JsonValueKind.Number || !used.TryGetDouble(out var percent) || !double.IsFinite(percent) || percent < 0 || percent > 100) return;
-            DateTimeOffset? reset = window.TryGetProperty("resets_at", out var r) && DateTimeOffset.TryParse(r.ToString(), out var time) ? time : null;
-            quotas.Add(new(name, 100 - percent, reset));
+            if ((primary && quotas.Any(q => q.IncludeInSummary)) ||
+                quotas.Any(q => q.Name == label || (field == "seven_day_fable" && q.Name.Contains("Fable", StringComparison.OrdinalIgnoreCase)))) return;
+            if (root.TryGetProperty(field, out var window) && window.ValueKind == JsonValueKind.Object)
+                Add(window, "utilization", label, primary);
+        }
+        void Add(JsonElement window, string key, string name, bool primary)
+        {
+            if (!window.TryGetProperty(key, out var used) || used.ValueKind != JsonValueKind.Number ||
+                !used.TryGetDouble(out var percent) || !double.IsFinite(percent) || percent < 0 || percent > 100) return;
+            DateTimeOffset? reset = window.TryGetProperty("resets_at", out var r) && r.ValueKind == JsonValueKind.String &&
+                DateTimeOffset.TryParse(r.GetString(), out var time) ? time : null;
+            quotas.Add(new(name, 100 - percent, reset, primary));
         }
     }
+
+    static string? String(JsonElement element, string name) => element.TryGetProperty(name, out var value) &&
+        value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
     public static Snapshot ParseCached(JsonElement root, string error)
     {
@@ -111,8 +224,14 @@ sealed class ClaudeUsageService : IDisposable
             { stamp = n; latest = sample; }
         if (latest is not { } item || !item.TryGetProperty("u", out var usage) || usage.ValueKind != JsonValueKind.Object) return new([], error);
         List<Quota> quotas = [];
-        if (usage.TryGetProperty("sd", out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var percent) && double.IsFinite(percent) && percent >= 0 && percent <= 100)
-            quotas.Add(new("Weekly \u00b7 all models", 100 - percent, null));
+        foreach (var (key, label, primary) in new[]
+        {
+            ("sd", "Weekly - all models", true), ("fh", "Session - 5 hours", false),
+            ("so", "Weekly - Opus", false), ("sn", "Weekly - Sonnet", false)
+        })
+            if (usage.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.Number &&
+                value.TryGetDouble(out var percent) && double.IsFinite(percent) && percent >= 0 && percent <= 100)
+                quotas.Add(new(label, 100 - percent, null, primary));
         DateTimeOffset? measured = null;
         try { measured = DateTimeOffset.FromUnixTimeMilliseconds(stamp); } catch (ArgumentOutOfRangeException) { }
         return new(quotas, error, measured);

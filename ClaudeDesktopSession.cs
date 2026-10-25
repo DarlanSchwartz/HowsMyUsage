@@ -77,7 +77,7 @@ static class ClaudeDesktopSession
         finally { CryptographicOperations.ZeroMemory(clear); }
     }
 
-    static byte[] Unprotect(byte[] encrypted)
+    internal static byte[] Unprotect(byte[] encrypted)
     {
         var input = new Blob { Size = encrypted.Length, Data = Marshal.AllocHGlobal(encrypted.Length) };
         try
@@ -100,9 +100,33 @@ static class ClaudeDesktopSession
         finally { Marshal.FreeHGlobal(input.Data); }
     }
 
+    internal static byte[] Protect(byte[] clear)
+    {
+        var input = new Blob { Size = clear.Length, Data = Marshal.AllocHGlobal(clear.Length) };
+        try
+        {
+            Marshal.Copy(clear, 0, input.Data, clear.Length);
+            if (!CryptProtectData(ref input, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, 1, out var output))
+                throw new InvalidOperationException("Could not protect the Claude connection for this Windows user.");
+            try
+            {
+                var encrypted = new byte[output.Size];
+                Marshal.Copy(output.Data, encrypted, 0, encrypted.Length);
+                return encrypted;
+            }
+            finally { LocalFree(output.Data); }
+        }
+        finally
+        {
+            for (int i = 0; i < input.Size; i++) Marshal.WriteByte(input.Data, i, 0);
+            Marshal.FreeHGlobal(input.Data);
+        }
+    }
+
     static string Text(IntPtr statement, int column) => Marshal.PtrToStringUTF8(sqlite3_column_text(statement, column)) ?? "";
     [StructLayout(LayoutKind.Sequential)] struct Blob { public int Size; public IntPtr Data; }
     [DllImport("crypt32.dll", SetLastError = true)] static extern bool CryptUnprotectData(ref Blob input, IntPtr description, IntPtr entropy, IntPtr reserved, IntPtr prompt, uint flags, out Blob output);
+    [DllImport("crypt32.dll", SetLastError = true)] static extern bool CryptProtectData(ref Blob input, IntPtr description, IntPtr entropy, IntPtr reserved, IntPtr prompt, uint flags, out Blob output);
     [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr data);
     [DllImport("winsqlite3.dll", CallingConvention = CallingConvention.Cdecl)] static extern int sqlite3_open_v2([MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr database, int flags, IntPtr vfs);
     [DllImport("winsqlite3.dll", CallingConvention = CallingConvention.Cdecl)] static extern int sqlite3_busy_timeout(IntPtr database, int milliseconds);

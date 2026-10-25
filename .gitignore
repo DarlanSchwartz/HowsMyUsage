@@ -15,3 +15,6 @@ startup.log
 auth.json
 *.pfx
 *.key
+claude-session.bin
+claude-session.bin.tmp
+claude.log

@@ -70,7 +70,7 @@ static class Providers
                 if (!bucket.TryGetProperty(key, out var window) || window.ValueKind != JsonValueKind.Object ||
                     !window.TryGetProperty("usedPercent", out var used) || !used.TryGetDouble(out var percent) || !double.IsFinite(percent)) continue;
                 var duration = window.TryGetProperty("windowDurationMins", out var mins) && mins.TryGetInt32(out var m)
-                    ? (m >= 1440 ? $"{m / 1440d:0.#} days" : $"{m / 60d:0.#} h") : key;
+                    ? (m >= 1440 ? $"{m / 1440d:0.#} days" : $"Session - {m / 60d:0.#} hours") : key;
                 DateTimeOffset? reset = window.TryGetProperty("resetsAt", out var r) && r.TryGetInt64(out var seconds) ? DateTimeOffset.FromUnixTimeSeconds(seconds) : null;
                 quotas.Add(new($"{name} \u00b7 {duration}", Math.Clamp(100 - percent, 0, 100), reset));
             }

@@ -48,7 +48,7 @@ static class Program
             throw new Exception("Antigravity session must not replace a missing weekly quota");
         using var claudeFixture = JsonDocument.Parse("{\"five_hour\":{\"utilization\":20},\"seven_day\":{\"utilization\":65},\"extra_usage\":{\"utilization\":99}}");
         var claudeParsed = ClaudeUsageService.Parse(claudeFixture.RootElement);
-        if (claudeParsed.Quotas.Count != 1 || claudeParsed.Remaining != 35) throw new Exception("Claude must show only the weekly quota");
+        if (claudeParsed.Quotas.Count != 2 || claudeParsed.Remaining != 35) throw new Exception("Claude indicator must remain weekly while retaining session details");
         using var missing = JsonDocument.Parse("{\"five_hour\":{\"utilization\":null},\"seven_day\":null}");
         if (ClaudeUsageService.Parse(missing.RootElement).Remaining != null) throw new Exception("Missing Claude quota must stay unknown");
         using var current = JsonDocument.Parse("{\"limits\":[{\"kind\":\"session\",\"percent\":12},{\"kind\":\"weekly_all\",\"percent\":3}],\"five_hour\":{\"utilization\":90}}");
@@ -60,6 +60,30 @@ static class Program
         if (stale.Remaining != 100 || stale.Error == null || stale.MeasuredAt?.ToUnixTimeMilliseconds() != 1791079244560) throw new Exception("Cached weekly quota must retain its original timestamp and failure");
         using var cachedSessionOnly = JsonDocument.Parse("{\"samples\":[{\"t\":1791079244560,\"u\":{\"fh\":1}}]}");
         if (ClaudeUsageService.ParseCached(cachedSessionOnly.RootElement, "Session locked").Remaining != null) throw new Exception("Cached session quota must not replace missing weekly quota");
+        using var fable = JsonDocument.Parse("""
+            {"limits":[{"kind":"weekly_all","group":"weekly","percent":40},
+            {"kind":"session","group":"session","percent":80},
+            {"kind":"weekly_model","group":"weekly","percent":25,"scope":{"model":{"display_name":"Fable 5"}}}],
+            "five_hour":{"utilization":80},"seven_day":{"utilization":40}}
+            """);
+        var withFable = ClaudeUsageService.Parse(fable.RootElement);
+        if (withFable.Remaining != 60 || withFable.Quotas.Count != 3 ||
+            !withFable.Quotas.Any(q => q.Name == "Weekly - Fable 5" && q.Remaining == 75 && !q.IncludeInSummary))
+            throw new Exception("Session and Fable must appear in details without changing weekly total");
+        if (!stale.Quotas.Any(q => q.Name == "Session - 5 hours" && q.Remaining == 99))
+            throw new Exception("Cached Claude session quota must appear in details");
+        using var codexSession = JsonDocument.Parse("""
+            {"rateLimits":{"primary":{"usedPercent":40,"windowDurationMins":300},"secondary":{"usedPercent":20,"windowDurationMins":10080}}}
+            """);
+        var codexDetails = Providers.ParseCodex(codexSession.RootElement);
+        if (codexDetails.Quotas.Count != 2 || !codexDetails.Quotas.Any(q => q.Name.Contains("Session")))
+            throw new Exception("Codex session quota must be included when returned");
+        var protectedFixture = System.Text.Encoding.UTF8.GetBytes("connection-roundtrip-fixture");
+        var encryptedFixture = ClaudeDesktopSession.Protect(protectedFixture);
+        var restoredFixture = ClaudeDesktopSession.Unprotect(encryptedFixture);
+        if (!restoredFixture.SequenceEqual(protectedFixture) || encryptedFixture.SequenceEqual(protectedFixture))
+            throw new Exception("Claude connection protection failed");
+        System.Security.Cryptography.CryptographicOperations.ZeroMemory(restoredFixture);
         using var claude = new ClaudeUsageService();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         var results = await Task.WhenAll(Safe(Providers.Codex, cts.Token), Safe(Providers.Antigravity, cts.Token), Safe(claude.Read, cts.Token));
