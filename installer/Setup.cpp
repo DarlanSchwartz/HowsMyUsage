@@ -63,6 +63,29 @@ class Installation {
     }
 public:
     Installation(HWND owner, fs::path folder) : window(owner), destination(std::move(folder)) {}
+    void CreateDesktopShortcut() {
+        HRESULT initialized = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        IShellLinkW* link = nullptr;
+        HRESULT result = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&link));
+        if (SUCCEEDED(result)) {
+            link->SetPath((destination / L"Usage.exe").c_str());
+            link->SetWorkingDirectory(destination.c_str());
+            link->SetIconLocation((destination / L"Usage.exe").c_str(), 0);
+            link->SetDescription(L"HowsMyUsage");
+            IPersistFile* file = nullptr;
+            result = link->QueryInterface(IID_PPV_ARGS(&file));
+            if (SUCCEEDED(result)) {
+                PWSTR desktop = nullptr;
+                result = SHGetKnownFolderPath(FOLDERID_Desktop, 0, nullptr, &desktop);
+                if (SUCCEEDED(result)) result = file->Save((fs::path(desktop) / L"HowsMyUsage.lnk").c_str(), TRUE);
+                CoTaskMemFree(desktop);
+                file->Release();
+            }
+            link->Release();
+        }
+        if (SUCCEEDED(initialized)) CoUninitialize();
+        if (FAILED(result)) throw std::runtime_error("App installed, but Desktop shortcut creation failed. Retry without that option.");
+    }
     static fs::path Validate(const std::wstring& value) {
         if (value.empty()) throw std::runtime_error("Choose an installation folder.");
         fs::path path = fs::absolute(fs::path(value)).lexically_normal();
@@ -80,7 +103,7 @@ public:
         }
         return path;
     }
-    void Run(bool startup) {
+    void Run(bool startup, bool desktopShortcut) {
         HANDLE mutex = OpenMutexW(SYNCHRONIZE, FALSE, L"Usage.NativeTray");
         if (mutex) { CloseHandle(mutex); throw std::runtime_error("Exit HowsMyUsage from the tray, then try again."); }
         fs::create_directories(destination);
@@ -121,11 +144,12 @@ public:
                 std::wstring(existing).find(folder + L"\\startup.ps1") != std::wstring::npos)
                 RegDeleteKeyValueW(HKEY_CURRENT_USER, run, L"UsageWidget");
         }
+        if (desktopShortcut) CreateDesktopShortcut();
     }
 };
 
 class SetupWindow {
-    HWND window = nullptr, path = nullptr, browse = nullptr, startup = nullptr, action = nullptr;
+    HWND window = nullptr, path = nullptr, browse = nullptr, startup = nullptr, shortcut = nullptr, action = nullptr;
     HFONT font = nullptr;
     HBRUSH background = CreateSolidBrush(Background), surface = CreateSolidBrush(Surface);
     Stage stage = Stage::Ready;
@@ -172,11 +196,12 @@ class SetupWindow {
         try { installedFolder = Installation::Validate(value).wstring(); }
         catch (const std::exception& e) { ShowError(e.what()); return; }
         stage = Stage::Installing; error.clear();
-        for (HWND control : {path, browse, startup, action}) ShowWindow(control, SW_HIDE);
+        for (HWND control : {path, browse, startup, shortcut, action}) ShowWindow(control, SW_HIDE);
         InvalidateRect(window, nullptr, TRUE);
         const bool start = SendMessageW(startup, BM_GETCHECK, 0, 0) == BST_CHECKED;
-        std::thread([owner = window, folder = installedFolder, start]() {
-            try { Installation(owner, folder).Run(start); PostMessageW(owner, Complete, 0, 0); }
+        const bool desktopShortcut = SendMessageW(shortcut, BM_GETCHECK, 0, 0) == BST_CHECKED;
+        std::thread([owner = window, folder = installedFolder, start, desktopShortcut]() {
+            try { Installation(owner, folder).Run(start, desktopShortcut); PostMessageW(owner, Complete, 0, 0); }
             catch (const std::exception& e) {
                 const std::string text = e.what();
                 PostMessageW(owner, Complete, 1, reinterpret_cast<LPARAM>(new std::wstring(text.begin(), text.end())));
@@ -189,7 +214,7 @@ class SetupWindow {
     void ShowError(const std::wstring& text) {
         error = text; stage = Stage::Failed;
         SetWindowTextW(action, L"Try again");
-        for (HWND control : {path, browse, startup, action}) ShowWindow(control, SW_SHOW);
+        for (HWND control : {path, browse, startup, shortcut, action}) ShowWindow(control, SW_SHOW);
         InvalidateRect(window, nullptr, TRUE);
     }
     void Paint() {
@@ -225,7 +250,7 @@ class SetupWindow {
         if (!error.empty()) {
             Gdiplus::SolidBrush red(Gdiplus::Color(255, 251, 146, 146));
             Gdiplus::Font body(&family, 13, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-            g.DrawString(error.c_str(), -1, &body, Gdiplus::RectF(270, 275, 365, 36), nullptr, &red);
+            g.DrawString(error.c_str(), -1, &body, Gdiplus::RectF(270, 90, 365, 32), nullptr, &red);
         }
         EndPaint(window, &paint);
     }
@@ -262,7 +287,8 @@ class SetupWindow {
         }
         SelectObject(dc, self->font); SetBkMode(dc, TRANSPARENT); SetTextColor(dc, Text);
         bounds.left = self->S(34);
-        DrawTextW(dc, L"Start with Windows", -1, &bounds, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        wchar_t label[100]; GetWindowTextW(control, label, 100);
+        DrawTextW(dc, label, -1, &bounds, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         if (GetFocus() == control) { InflateRect(&bounds, -2, -2); DrawFocusRect(dc, &bounds); }
         EndPaint(control, &paint); return 0;
     }
@@ -275,6 +301,9 @@ class SetupWindow {
             browse = Control(L"BUTTON", L"Browse", BS_OWNERDRAW, 2, 557, 128, 78, 44);
             startup = Control(L"BUTTON", L"Start with Windows", BS_AUTOCHECKBOX, 5, 270, 231, 365, 32);
             SetWindowSubclass(startup, Checkbox, 1, reinterpret_cast<DWORD_PTR>(this));
+            shortcut = Control(L"BUTTON", L"Desktop shortcut", BS_AUTOCHECKBOX, 6, 270, 269, 365, 32);
+            SetWindowSubclass(shortcut, Checkbox, 1, reinterpret_cast<DWORD_PTR>(this));
+            SendMessageW(shortcut, BM_SETCHECK, BST_CHECKED, 0);
             wchar_t existing[4096]; DWORD bytes = sizeof(existing);
             bool enabled = RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", L"UsageWidget", RRF_RT_REG_SZ, nullptr, existing, &bytes) == ERROR_SUCCESS;
             SendMessageW(startup, BM_SETCHECK, enabled ? BST_CHECKED : BST_UNCHECKED, 0);
@@ -353,16 +382,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     bool silent = false;
     try {
         int count = 0; auto args = CommandLineToArgvW(GetCommandLineW(), &count);
-        std::wstring folder; bool automatic = false, startup = false;
+        std::wstring folder; bool automatic = false, startup = false, shortcut = true;
         for (int i = 1; i < count; i++) {
             std::wstring arg = args[i];
             if (arg == L"/S") silent = true;
             if (arg == L"/INSTALL") automatic = true;
             if (arg == L"/STARTUP") startup = true;
+            if (arg == L"/NOSHORTCUT") shortcut = false;
             if (arg.rfind(L"/D=", 0) == 0) folder = arg.substr(3);
         }
         LocalFree(args);
-        if (silent) Installation(nullptr, Installation::Validate(folder)).Run(startup);
+        if (silent) Installation(nullptr, Installation::Validate(folder)).Run(startup, shortcut);
         else result = SetupWindow(folder, automatic).Run(instance);
     }
     catch (...) { if (!silent) MessageBoxW(nullptr, L"Setup could not start.", L"HowsMyUsage", MB_ICONERROR); result = 1; }

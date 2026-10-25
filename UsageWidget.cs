@@ -217,12 +217,19 @@ sealed class UsageWidget : Form
                 pin.Hide();
                 bool originalMode = settings.AlwaysOnTop;
                 var originalPosition = PointToScreen(Point.Empty);
+                int originalDpi = DeviceDpi;
                 settings.AlwaysOnTop = true;
                 ApplyWindowMode();
                 bool topModePassed = TopMost && !desktop.IsAttached(this) && !ShowInTaskbar && PointToScreen(Point.Empty) == originalPosition;
                 settings.AlwaysOnTop = false;
                 ApplyWindowMode();
-                bool desktopModePassed = !TopMost && desktop.IsAttached(this) && PointToScreen(Point.Empty) == originalPosition;
+                bool desktopModePassed = !TopMost && desktop.IsAttached(this) &&
+                    PointToScreen(Point.Empty) == originalPosition && DeviceDpi == originalDpi;
+                using (var desktopPreview = new Bitmap(ClientSize.Width, ClientSize.Height))
+                {
+                    DrawToBitmap(desktopPreview, ClientRectangle);
+                    desktopPreview.Save("artifacts/widget-desktop.png");
+                }
                 settings.AlwaysOnTop = originalMode;
                 ApplyWindowMode();
                 bool workAreaPassed = Screen.AllScreens.All(screen =>
@@ -379,6 +386,12 @@ sealed class UsageWidget : Form
             desktop.Attach(this);
         }
         KeepOnDesktop();
+    }
+
+    protected override void OnDeactivate(EventArgs e)
+    {
+        base.OnDeactivate(e);
+        if (!settings.AlwaysOnTop && IsHandleCreated) desktop.Lower(this);
     }
 
     void ToggleWidget()

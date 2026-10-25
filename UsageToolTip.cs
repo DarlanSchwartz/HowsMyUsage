@@ -36,7 +36,7 @@ sealed class UsageToolTip : IDisposable
                 "\n" + (groups.Length == 1 && group.Count() > 3 ? $"All {group.Count()} models" : string.Join(", ", group.Select(q => q.Name)))));
             if (snapshot.Error != null)
                 body += (body.Length > 0 ? "\n\n" : "") +
-                    (snapshot.MeasuredAt is { } captured ? $"Cached reading \u00b7 {captured.LocalDateTime:MMM d, HH:mm}\nLive refresh unavailable." : snapshot.Error);
+                    (snapshot.MeasuredAt is { } captured ? $"Cached reading \u00b7 {captured.LocalDateTime:MMM d, HH:mm}\n{snapshot.Error}" : snapshot.Error);
         }
         contents[control] = new(name, body, checkedAt is { } time ? $"Last checked {time.LocalDateTime:HH:mm}" : "Waiting for first check");
         tip.SetToolTip(control, name + "\n" + body + "\n" + contents[control].Footer);

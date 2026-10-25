@@ -32,9 +32,16 @@ sealed class ClaudeUsageService : IDisposable
         var packages = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Packages");
         if (Directory.Exists(packages))
             paths.AddRange(Directory.EnumerateDirectories(packages, "Claude_*").Select(p => Path.Combine(p, "LocalCache", "Roaming", "Claude")));
-        return paths.Where(p => File.Exists(Path.Combine(p, "Network", "Cookies")))
-            .OrderByDescending(p => File.GetLastWriteTimeUtc(Path.Combine(p, "Network", "Cookies"))).FirstOrDefault();
+        return SelectProfile(paths);
     }
+
+    internal static string? SelectProfile(IEnumerable<string> paths) => paths.Where(Directory.Exists)
+        .Select(folder => new { Folder = folder, Files = new[] { ClaudeDesktopSession.CookiePath(folder),
+            Path.Combine(folder, "config.json"), Path.Combine(folder, "plan-usage-history.json") }
+            .Where(path => path != null && File.Exists(path)).ToArray() })
+        .Where(profile => profile.Files.Length > 0)
+        .OrderByDescending(profile => profile.Files.Max(path => File.GetLastWriteTimeUtc(path!)))
+        .Select(profile => profile.Folder).FirstOrDefault();
 
     public async Task<Snapshot> Read(CancellationToken token)
     {
@@ -63,7 +70,7 @@ sealed class ClaudeUsageService : IDisposable
         var folder = FindProfile();
         if (folder == null) return new([], "Sign in to Claude Desktop first.");
         var identity = ReadIdentity(folder);
-        if (identity != sessionIdentity) { cachedSession = null; sessionIdentity = identity; }
+        if (identity == null || identity != sessionIdentity) { cachedSession = null; sessionIdentity = identity; }
         var session = cachedSession ??= await Task.Run(() => ReadConnection(folder, identity), token);
         var organization = session.Organization;
         if (organization == null)
@@ -114,16 +121,22 @@ sealed class ClaudeUsageService : IDisposable
         return JsonDocument.Parse(body);
     }
 
-    static string ReadIdentity(string folder)
+    static string? ReadIdentity(string folder)
     {
-        using var config = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, "config.json")));
-        var account = String(config.RootElement, "lastKnownAccountUuid");
-        if (string.IsNullOrWhiteSpace(account)) throw new InvalidOperationException("Claude account identity unavailable. Open Claude Desktop and sign in.");
-        return folder + "|" + account;
+        try
+        {
+            using var config = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, "config.json")));
+            var account = config.RootElement.ValueKind == JsonValueKind.Object ? String(config.RootElement, "lastKnownAccountUuid") : null;
+            return string.IsNullOrWhiteSpace(account) ? null : folder + "|" + account;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { return null; }
     }
 
-    static (string SessionKey, string? Organization) ReadConnection(string folder, string identity)
+    static (string SessionKey, string? Organization) ReadConnection(string folder, string? identity)
     {
+        // Older Desktop versions may omit the account marker. Read their actual
+        // cookies, but never reuse or persist an unscoped saved connection.
+        if (identity == null) return ClaudeDesktopSession.Read(folder);
         try
         {
             var clear = ClaudeDesktopSession.Unprotect(File.ReadAllBytes(ConnectionPath));

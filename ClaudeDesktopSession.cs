@@ -8,8 +8,15 @@ namespace Usage;
 // Read only the two Claude cookies needed for the quota request. No database copies or credential persistence.
 static class ClaudeDesktopSession
 {
+    public static string? CookiePath(string folder) => new[]
+    {
+        Path.Combine(folder, "Network", "Cookies"), Path.Combine(folder, "Cookies"),
+        Path.Combine(folder, "Default", "Network", "Cookies"), Path.Combine(folder, "Default", "Cookies")
+    }.Where(File.Exists).OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
+
     public static (string SessionKey, string? Organization) Read(string folder)
     {
+        var path = CookiePath(folder) ?? throw new InvalidOperationException("Claude Desktop session was not found. Open Claude Desktop, sign in and refresh.");
         using var state = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, "Local State")));
         var wrapped = Convert.FromBase64String(state.RootElement.GetProperty("os_crypt").GetProperty("encrypted_key").GetString()!);
         if (!wrapped.AsSpan().StartsWith("DPAPI"u8)) throw new InvalidOperationException("Unsupported Claude Desktop sign-in format.");
@@ -18,7 +25,6 @@ static class ClaudeDesktopSession
         IntPtr statement = IntPtr.Zero;
         try
         {
-            var path = Path.Combine(folder, "Network", "Cookies");
             if (sqlite3_open_v2("file:///" + path.Replace('\\', '/') + "?immutable=1", out database, 1 | 0x40, IntPtr.Zero) != 0)
                 throw new InvalidOperationException("Live Claude usage is unavailable while the session file is locked. Exit Claude Desktop briefly, then refresh Usage to connect.");
             sqlite3_busy_timeout(database, 1000);

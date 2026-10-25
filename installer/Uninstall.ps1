@@ -2,6 +2,11 @@ $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath($PSScriptRoot)
 $exe = Join-Path $root 'Usage.exe'
 if (Get-Process Usage -ErrorAction SilentlyContinue | Where-Object Path -EQ $exe) { throw 'Exit HowsMyUsage from the tray before uninstalling.' }
+$shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'HowsMyUsage.lnk'
+if (Test-Path -LiteralPath $shortcut) {
+    $shell = New-Object -ComObject WScript.Shell
+    if ($shell.CreateShortcut($shortcut).TargetPath -eq $exe) { Remove-Item -LiteralPath $shortcut -Force }
+}
 $files = Get-Content -LiteralPath (Join-Path $root 'install-files.json') -Raw | ConvertFrom-Json
 foreach ($relative in $files) {
     $target = [IO.Path]::GetFullPath((Join-Path $root $relative))

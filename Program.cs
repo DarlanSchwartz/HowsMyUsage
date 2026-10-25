@@ -79,11 +79,34 @@ static class Program
         if (!restoredFixture.SequenceEqual(protectedFixture) || encryptedFixture.SequenceEqual(protectedFixture))
             throw new Exception("Claude connection protection failed");
         System.Security.Cryptography.CryptographicOperations.ZeroMemory(restoredFixture);
+        CheckClaudeProfileLayouts();
         using var claude = new ClaudeUsageService();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         var results = await Task.WhenAll(Safe(Providers.Codex, cts.Token), Safe(Providers.Antigravity, cts.Token), Safe(claude.Read, cts.Token));
         Directory.CreateDirectory("artifacts");
         await File.WriteAllTextAsync("artifacts/check.json", JsonSerializer.Serialize(new { parsers = "passed", codex = results[0], antigravity = results[1], claude = results[2] }, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    static void CheckClaudeProfileLayouts()
+    {
+        var folder = Path.Combine(AppContext.BaseDirectory, "temp", "claude-profile-check-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            foreach (var relative in new[] { "Network/Cookies", "Cookies", "Default/Network/Cookies", "Default/Cookies" })
+            {
+                var path = Path.GetFullPath(Path.Combine(folder, relative));
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllBytes(path, []);
+                if (ClaudeDesktopSession.CookiePath(folder) != path || ClaudeUsageService.SelectProfile([folder]) != folder)
+                    throw new Exception("Claude profile layout detection failed: " + relative);
+                File.Delete(path);
+            }
+            File.WriteAllText(Path.Combine(folder, "plan-usage-history.json"), "{\"samples\":[]}");
+            if (ClaudeUsageService.SelectProfile([folder]) != folder)
+                throw new Exception("Claude history must be available even without a cookie database");
+        }
+        finally { Directory.Delete(folder, true); }
     }
 
     public static async Task<Snapshot> Safe(Func<CancellationToken, Task<Snapshot>> fetch, CancellationToken token)
