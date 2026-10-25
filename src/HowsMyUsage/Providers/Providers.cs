@@ -147,7 +147,7 @@ static class Providers
                 if (id.GetString()!.EndsWith("-weekly") != weekly) continue;
                 DateTimeOffset? reset = bucket.TryGetProperty("resetTime", out var r) &&
                     r.ValueKind == JsonValueKind.String && DateTimeOffset.TryParse(r.GetString(), out var time) ? time : null;
-                quotas.Add(new($"{pool} · {period}", fraction * 100, reset, pool == "Gemini" && weekly));
+                quotas.Add(new($"{pool} \u00b7 {period}", fraction * 100, reset, pool == "Gemini" && weekly));
             }
         }
         return new(quotas, quotas.Any(q => q.IncludeInSummary) ? null :

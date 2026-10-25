@@ -1,6 +1,8 @@
+param([string]$Version = '1.1.3')
 $ErrorActionPreference = 'Stop'
-Set-Location $PSScriptRoot
-$buildRoot = Join-Path $PSScriptRoot '.build'
+$projectRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $projectRoot
+$buildRoot = Join-Path $projectRoot '.build'
 foreach ($folder in 'temp','cli','packages','http') { New-Item -ItemType Directory -Force (Join-Path $buildRoot $folder) | Out-Null }
 $env:TEMP = Join-Path $buildRoot 'temp'
 $env:TMP = $env:TEMP
@@ -10,5 +12,5 @@ $env:NUGET_HTTP_CACHE_PATH = Join-Path $buildRoot 'http'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'
 $env:DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o dist/widget
-if ($LASTEXITCODE -ne 0) { throw 'Falha na compilação.' }
+dotnet publish src/HowsMyUsage/Usage.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false "-p:Version=$Version" -o dist/widget
+if ($LASTEXITCODE -ne 0) { throw 'Falha na compilaÃ§Ã£o.' }

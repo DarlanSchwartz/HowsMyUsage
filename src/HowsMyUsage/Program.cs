@@ -34,7 +34,7 @@ static class Program
             """);
         var parsed = Providers.ParseAntigravity(gemini.RootElement);
         if (parsed.Quotas.Count != 4 || parsed.Remaining != 97 ||
-            !parsed.Quotas.Any(q => q.Name == "Claude / GPT · Weekly" && q.Remaining == 39))
+            !parsed.Quotas.Any(q => q.Name.StartsWith("Claude / GPT") && q.Name.EndsWith("Weekly") && q.Remaining == 39))
             throw new Exception("Antigravity must select Gemini weekly and retain both pools for details");
         using var sessionQuota = JsonDocument.Parse("""
             {"response":{"groups":[{"buckets":[{"bucketId":"gemini-5h","window":"5h","remainingFraction":1}]}]}}
@@ -98,13 +98,27 @@ static class Program
                 var path = Path.GetFullPath(Path.Combine(folder, relative));
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 File.WriteAllBytes(path, []);
-                if (ClaudeDesktopSession.CookiePath(folder) != path || ClaudeUsageService.SelectProfile([folder]) != folder)
+                if (ClaudeDesktopSession.CookiePath(folder) != path || ClaudeProfileDiscovery.Select([folder]) != folder)
                     throw new Exception("Claude profile layout detection failed: " + relative);
                 File.Delete(path);
             }
             File.WriteAllText(Path.Combine(folder, "plan-usage-history.json"), "{\"samples\":[]}");
-            if (ClaudeUsageService.SelectProfile([folder]) != folder)
+            if (ClaudeProfileDiscovery.Select([folder]) != folder)
                 throw new Exception("Claude history must be available even without a cookie database");
+            var configOnly = Path.Combine(folder, "config-only");
+            Directory.CreateDirectory(configOnly);
+            File.WriteAllText(Path.Combine(configOnly, "config.json"), "{}");
+            if (ClaudeProfileDiscovery.Select([configOnly, folder]) != folder || ClaudeProfileDiscovery.Find(folder) != folder)
+                throw new Exception("A config-only folder must not hide session history; explicit profile overrides must work");
+            var local = Path.Combine(folder, "local");
+            var modern = Path.Combine(local, "Claude-Data", "claude_profile");
+            Directory.CreateDirectory(modern);
+            File.WriteAllText(Path.Combine(modern, "plan-usage-history.json"), "{\"samples\":[]}");
+            var candidates = ClaudeProfileDiscovery.Candidates(Path.Combine(folder, "roaming"), local).ToArray();
+            if (!candidates.Contains(modern) || ClaudeProfileDiscovery.Select(candidates) != modern)
+                throw new Exception("Claude-Data profiles must be discovered automatically");
+            if (ClaudeProfileDiscovery.DiagnosticReport(modern, null).Contains(folder))
+                throw new Exception("Claude diagnostic reports must not include user paths");
         }
         finally { Directory.Delete(folder, true); }
     }

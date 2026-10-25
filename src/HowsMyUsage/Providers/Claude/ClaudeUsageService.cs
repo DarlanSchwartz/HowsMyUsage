@@ -7,6 +7,8 @@ namespace Usage;
 sealed class ClaudeUsageService : IDisposable
 {
     readonly HttpClient client = new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(15) };
+    public string? ProfileDirectory { get; set; }
+    public int? LastHttpStatus { get; private set; }
     DateTimeOffset retryAfter;
     (string SessionKey, string? Organization)? cachedSession;
     string? sessionIdentity;
@@ -26,25 +28,9 @@ sealed class ClaudeUsageService : IDisposable
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
-    public static string? FindProfile()
-    {
-        var paths = new List<string> { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Claude") };
-        var packages = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Packages");
-        if (Directory.Exists(packages))
-            paths.AddRange(Directory.EnumerateDirectories(packages, "Claude_*").Select(p => Path.Combine(p, "LocalCache", "Roaming", "Claude")));
-        return SelectProfile(paths);
-    }
-
-    internal static string? SelectProfile(IEnumerable<string> paths) => paths.Where(Directory.Exists)
-        .Select(folder => new { Folder = folder, Files = new[] { ClaudeDesktopSession.CookiePath(folder),
-            Path.Combine(folder, "config.json"), Path.Combine(folder, "plan-usage-history.json") }
-            .Where(path => path != null && File.Exists(path)).ToArray() })
-        .Where(profile => profile.Files.Length > 0)
-        .OrderByDescending(profile => profile.Files.Max(path => File.GetLastWriteTimeUtc(path!)))
-        .Select(profile => profile.Folder).FirstOrDefault();
-
     public async Task<Snapshot> Read(CancellationToken token)
     {
+        LastHttpStatus = null;
         try
         {
             var live = await ReadLive(token);
@@ -54,7 +40,7 @@ sealed class ClaudeUsageService : IDisposable
         catch (Exception e) when (e is InvalidOperationException or IOException or UnauthorizedAccessException or JsonException or CryptographicException or HttpRequestException)
         {
             Log($"live failed ({e.GetType().Name}): {e.Message} | saved connection: {(File.Exists(ConnectionPath) ? "yes" : "no")}, in memory: {(cachedSession != null ? "yes" : "no")}");
-            var folder = FindProfile();
+            var folder = ClaudeProfileDiscovery.Find(ProfileDirectory);
             if (folder == null) return new([], e.Message);
             var path = Path.Combine(folder, "plan-usage-history.json");
             if (!File.Exists(path)) return new([], e.Message);
@@ -67,8 +53,8 @@ sealed class ClaudeUsageService : IDisposable
     async Task<Snapshot> ReadLive(CancellationToken token)
     {
         if (DateTimeOffset.UtcNow < retryAfter) return new([], "Claude rate limited requests. Retrying after a short pause.");
-        var folder = FindProfile();
-        if (folder == null) return new([], "Sign in to Claude Desktop first.");
+        var folder = ClaudeProfileDiscovery.Find(ProfileDirectory);
+        if (folder == null) return new([], "Claude data folder not found. Choose Claude > Data folder from the tray menu.");
         var identity = ReadIdentity(folder);
         if (identity == null || identity != sessionIdentity) { cachedSession = null; sessionIdentity = identity; }
         var session = cachedSession ??= await Task.Run(() => ReadConnection(folder, identity), token);
@@ -93,6 +79,7 @@ sealed class ClaudeUsageService : IDisposable
         request.Headers.Add("Accept", "application/json");
         request.Headers.UserAgent.ParseAdd("UsageWidget/1.0");
         using var response = await client.SendAsync(request, token);
+        LastHttpStatus = (int)response.StatusCode;
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
         {
             retryAfter = DateTimeOffset.UtcNow.AddMinutes(5);
