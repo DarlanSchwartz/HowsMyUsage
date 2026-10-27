@@ -11,6 +11,5 @@
   <ItemGroup>
     <EmbeddedResource Include="../../assets/*.png" LogicalName="Usage.assets.%(Filename)%(Extension)" />
     <EmbeddedResource Include="../../assets/usage.ico" LogicalName="Usage.assets.usage.ico" />
-    <None Include="../../runtime/startup.ps1" Link="startup.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

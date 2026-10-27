@@ -8,6 +8,7 @@ Requires Windows x64 and the .NET 10 SDK. Packaging also requires Visual Studio 
 
 # Exit the widget before checking its UI.
 Start-Process .\dist\widget\Usage.exe -ArgumentList '--check' -Wait
+Start-Process .\dist\widget\Usage.exe -ArgumentList '--check-startup' -Wait
 Start-Process .\dist\widget\Usage.exe -ArgumentList '--check-widget' -Wait
 
 # Build the installer and checksum. No portable or script-installer release.
@@ -20,7 +21,6 @@ Start-Process .\dist\widget\Usage.exe -ArgumentList '--check-widget' -Wait
 | --- | --- |
 | src/HowsMyUsage | WinForms app, UI, settings and quota providers |
 | installer | Native installer, uninstaller and shared shortcut integration |
-| runtime | Startup launcher |
 | assets | Provider and application icons |
 | scripts | Build and packaging |
 | tools | Asset generation tools |
@@ -30,6 +30,8 @@ Start-Process .\dist\widget\Usage.exe -ArgumentList '--check-widget' -Wait
 Packaging uses the publish manifest, bundles the native uninstaller and runtime licenses, and excludes local settings, sessions, logs and diagnostics. Installation scratch files stay on the selected drive and are removed after setup.
 
 The native uninstaller removes only manifest-listed application files and matching shortcuts/registry entries. Its confirmation offers a choice to keep preferences and the encrypted Claude connection. Unknown files in the installation folder are preserved.
+
+Startup uses a per-user Run entry pointing directly to Usage.exe --startup. The app waits up to 60 seconds for the desktop shell before creating its tray icon and records startup success or failure in startup.log. The tray checkbox also checks the Windows startup-disable state. --check-startup temporarily exercises the real registration and restores its original values.
 
 ## Sources
 

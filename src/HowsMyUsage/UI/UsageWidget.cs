@@ -20,7 +20,6 @@ sealed class UsageWidget : Form
     readonly System.Windows.Forms.Timer hoverTimer = new() { Interval = 100 };
     bool refreshing;
     bool moving;
-    const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
     public UsageWidget()
     {
@@ -443,19 +442,11 @@ sealed class UsageWidget : Form
 
     public static bool StartupEnabled()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RunKey);
-        return key?.GetValue("UsageWidget") is string;
+        return StartupRegistration.Enabled;
     }
     public static void SetStartup(bool enabled)
     {
-        using var key = Registry.CurrentUser.CreateSubKey(RunKey);
-        if (enabled)
-        {
-            var powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), @"WindowsPowerShell\v1.0\powershell.exe");
-            var script = Path.Combine(AppContext.BaseDirectory, "startup.ps1");
-            key.SetValue("UsageWidget", $"\"{powershell}\" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File \"{script}\"");
-        }
-        else key.DeleteValue("UsageWidget", false);
+        StartupRegistration.SetEnabled(enabled);
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)

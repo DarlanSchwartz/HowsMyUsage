@@ -12,7 +12,7 @@ A native Windows widget showing your remaining Codex, Gemini and Claude usage.
 
 ## Install
 
-1. Download HowsMyUsage-1.2.1-Setup.exe and open it.
+1. Download HowsMyUsage-1.2.2-Setup.exe and open it.
 2. Choose the folder and shortcut options, then click **Install**.
 3. Click **Open HowsMyUsage**.
 

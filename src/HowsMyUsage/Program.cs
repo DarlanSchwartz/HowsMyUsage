@@ -12,11 +12,39 @@ static class Program
         Environment.SetEnvironmentVariable("TEMP", temp);
         Environment.SetEnvironmentVariable("TMP", temp);
         ApplicationConfiguration.Initialize();
+        if (args.Contains("--check-startup")) { StartupRegistration.Check(); return; }
         if (args.Contains("--check")) { Check().GetAwaiter().GetResult(); return; }
+        var startup = args.Contains("--startup");
+        if (startup)
+        {
+            // Wait for Explorer's desktop before creating the tray icon and desktop owner.
+            for (var attempt = 0; attempt < 60 && GetShellWindow() == IntPtr.Zero; attempt++)
+                Thread.Sleep(1000);
+        }
         using var mutex = new Mutex(true, "Usage.NativeTray", out var first);
         if (!first) return;
         if (args.Contains("--enable-startup")) UsageWidget.SetStartup(true);
-        Application.Run(new UsageWidget());
+        try
+        {
+            var widget = new UsageWidget();
+            if (startup) widget.Shown += (_, _) => StartupLog("Widget opened successfully.");
+            Application.Run(widget);
+        }
+        catch (Exception error)
+        {
+            if (startup) StartupLog($"Startup failed: {error.GetType().Name}: {error.Message}");
+            throw;
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    static extern IntPtr GetShellWindow();
+
+    static void StartupLog(string message)
+    {
+        try { File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "startup.log"), $"{DateTimeOffset.Now:o} {message}"); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     static async Task Check()

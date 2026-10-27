@@ -43,7 +43,10 @@ class Uninstallation {
         auto launcher = (root / L"startup.ps1").wstring();
         std::transform(command.begin(), command.end(), command.begin(), towlower);
         std::transform(launcher.begin(), launcher.end(), launcher.begin(), towlower);
-        if (command.find(launcher) != std::wstring::npos) RegDeleteKeyValueW(HKEY_CURRENT_USER, run, L"UsageWidget");
+        auto native = L"\"" + (root / L"Usage.exe").wstring() + L"\" --startup";
+        std::transform(native.begin(), native.end(), native.begin(), towlower);
+        if (command.find(launcher) != std::wstring::npos || command == native)
+            RegDeleteKeyValueW(HKEY_CURRENT_USER, run, L"UsageWidget");
         RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\HowsMyUsage");
         RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\HowsMyUsage");
     }

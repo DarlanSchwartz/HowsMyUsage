@@ -111,16 +111,18 @@ public:
         Register(uninstall, L"DisplayVersion", SETUP_VERSION);
         Register(uninstall, L"InstallLocation", folder);
         Register(uninstall, L"DisplayIcon", folder + L"\\Usage.exe,0");
-        wchar_t system[MAX_PATH]; GetSystemDirectoryW(system, MAX_PATH);
-        auto powershell = std::wstring(system) + L"\\WindowsPowerShell\\v1.0\\powershell.exe";
         Register(uninstall, L"UninstallString", L"\"" + folder + L"\\Uninstall.exe\"");
         Register(uninstall, L"QuietUninstallString", L"\"" + folder + L"\\Uninstall.exe\" /S");
         const wchar_t* run = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-        if (startup) Register(run, L"UsageWidget", L"\"" + powershell + L"\" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File \"" + folder + L"\\startup.ps1\"");
+        if (startup) {
+            Register(run, L"UsageWidget", L"\"" + folder + L"\\Usage.exe\" --startup");
+            RegDeleteKeyValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run", L"UsageWidget");
+        }
         if (!startup) {
             wchar_t existing[4096]; DWORD length = sizeof(existing);
             if (RegGetValueW(HKEY_CURRENT_USER, run, L"UsageWidget", RRF_RT_REG_SZ, nullptr, existing, &length) == ERROR_SUCCESS &&
-                std::wstring(existing).find(folder + L"\\startup.ps1") != std::wstring::npos)
+                (std::wstring(existing).find(folder + L"\\startup.ps1") != std::wstring::npos ||
+                 std::wstring(existing) == L"\"" + folder + L"\\Usage.exe\" --startup"))
                 RegDeleteKeyValueW(HKEY_CURRENT_USER, run, L"UsageWidget");
         }
         auto programs = ShellShortcuts::Folder(FOLDERID_Programs) / L"HowsMyUsage";
@@ -128,7 +130,7 @@ public:
         ShellShortcuts::Write(programs / L"HowsMyUsage.lnk", destination / L"Usage.exe");
         ShellShortcuts::Write(programs / L"Uninstall HowsMyUsage.lnk", destination / L"Uninstall.exe");
         if (desktopShortcut) ShellShortcuts::Write(ShellShortcuts::Folder(FOLDERID_Desktop) / L"HowsMyUsage.lnk", destination / L"Usage.exe");
-        for (const wchar_t* obsolete : {L"Uninstall.ps1", L"install-files.json"}) fs::remove(destination / obsolete);
+        for (const wchar_t* obsolete : {L"Uninstall.ps1", L"install-files.json", L"startup.ps1"}) fs::remove(destination / obsolete);
     }
 };
 
