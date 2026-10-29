@@ -31,7 +31,9 @@ Packaging uses the publish manifest, bundles the native uninstaller and runtime 
 
 The native uninstaller removes only manifest-listed application files and matching shortcuts/registry entries. Its confirmation offers a choice to keep preferences and the encrypted Claude connection. Unknown files in the installation folder are preserved.
 
-Startup uses a per-user Run entry pointing directly to Usage.exe --startup. The app waits up to 60 seconds for the desktop shell before creating its tray icon and records startup success or failure in startup.log. The tray checkbox also checks the Windows startup-disable state. --check-startup temporarily exercises the real registration and restores its original values.
+Startup uses a Task Scheduler logon trigger for the current interactive user, with no saved password or elevation. It launches Usage.exe --startup, allows battery operation, and retries failures. Enabling startup removes the legacy Run entry. The app waits up to 60 seconds for the desktop shell and records startup success or failure in startup.log. --check-startup exercises registration and restores the previous task and registry values.
+
+The widget is an independent window, never owned or parented to Explorer. A one-second visibility check restores hidden/minimized windows, constrains their position to connected monitors, and reapplies native topmost state without activation when enabled. Shell restart, display/work-area and power notifications trigger recovery too. Tray clicks restore visibility; only Exit closes the app. Windows lock/secure desktops and exclusive fullscreen remain controlled by Windows.
 
 ## Sources
 

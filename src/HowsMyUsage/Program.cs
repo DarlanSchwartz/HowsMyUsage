@@ -7,11 +7,25 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        // Installer/uninstaller configuration must not create runtime data folders.
+        if (args.Contains("--startup-status")) { Environment.ExitCode = StartupRegistration.Enabled ? 0 : 1; return; }
+        if (args.Contains("--configure-startup"))
+        {
+            try { StartupRegistration.SetEnabled(args.Contains("--enable")); }
+            catch (Exception error) { StartupLog($"Startup registration failed: {error.Message}"); Environment.ExitCode = 2; }
+            return;
+        }
         var temp = Path.Combine(AppContext.BaseDirectory, "temp");
         Directory.CreateDirectory(temp);
         Environment.SetEnvironmentVariable("TEMP", temp);
         Environment.SetEnvironmentVariable("TMP", temp);
         ApplicationConfiguration.Initialize();
+        if (args.Contains("--check-widget")) Application.ThreadException += (_, error) =>
+        {
+            Directory.CreateDirectory("artifacts");
+            File.WriteAllText("artifacts/widget-error.txt", error.Exception.ToString());
+            Environment.Exit(1);
+        };
         if (args.Contains("--check-startup")) { StartupRegistration.Check(); return; }
         if (args.Contains("--check")) { Check().GetAwaiter().GetResult(); return; }
         var startup = args.Contains("--startup");
@@ -22,7 +36,11 @@ static class Program
                 Thread.Sleep(1000);
         }
         using var mutex = new Mutex(true, "Usage.NativeTray", out var first);
-        if (!first) return;
+        if (!first)
+        {
+            PostMessage(new IntPtr(0xffff), UsageWidget.RestoreMessage, IntPtr.Zero, IntPtr.Zero);
+            return;
+        }
         if (args.Contains("--enable-startup")) UsageWidget.SetStartup(true);
         try
         {
@@ -39,6 +57,8 @@ static class Program
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     static extern IntPtr GetShellWindow();
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    static extern bool PostMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
 
     static void StartupLog(string message)
     {

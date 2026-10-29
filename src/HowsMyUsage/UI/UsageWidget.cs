@@ -18,6 +18,12 @@ sealed class UsageWidget : Form
     readonly DesktopHost desktop = new();
     readonly PinButton pin = new() { FlatStyle = FlatStyle.Flat, TabStop = true, Visible = false, Cursor = Cursors.Hand };
     readonly System.Windows.Forms.Timer hoverTimer = new() { Interval = 100 };
+    readonly System.Windows.Forms.Timer visibilityTimer = new() { Interval = 1000 };
+    static readonly int TaskbarCreated = RegisterWindowMessage("TaskbarCreated");
+    internal static readonly int RestoreMessage = RegisterWindowMessage("HowsMyUsage.RestoreWidget");
+    bool ready;
+    bool exiting;
+    bool recovering;
     bool refreshing;
     bool moving;
 
@@ -37,7 +43,11 @@ sealed class UsageWidget : Form
         AccessibleName = "Usage: remaining Codex, Gemini and Claude limits";
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Show / hide widget", null, (_, _) => ToggleWidget());
+        if (!Enumerable.Range(0, 3).Any(settings.ProviderEnabled))
+        {
+            settings.ShowCodex = true;
+            settings.Save();
+        }
         menu.Items.Add("Refresh", null, async (_, _) => await RefreshUsage());
         var alwaysOnTop = new ToolStripMenuItem("Always on top") { Checked = settings.AlwaysOnTop, CheckOnClick = true };
         alwaysOnTop.CheckedChanged += (_, _) =>
@@ -68,27 +78,33 @@ sealed class UsageWidget : Form
             var item = new ToolStripMenuItem(name) { Checked = settings.ProviderEnabled(index) };
             item.Click += async (_, _) =>
             {
+                if (settings.ProviderEnabled(index) && Enumerable.Range(0, 3).Count(settings.ProviderEnabled) == 1) return;
                 settings.SetProviderEnabled(index, !settings.ProviderEnabled(index));
                 item.Checked = settings.ProviderEnabled(index);
                 LayoutReadings();
-                if (Enumerable.Range(0, 3).Any(settings.ProviderEnabled)) { Show(); ApplyWindowMode(); }
-                else Hide();
+                RecoverVisibility();
                 SavePosition();
                 await RefreshUsage();
             };
             providersMenu.DropDownItems.Add(item);
         }
+        providersMenu.DropDownOpening += (_, _) =>
+        {
+            int enabledCount = Enumerable.Range(0, 3).Count(settings.ProviderEnabled);
+            for (int i = 0; i < 3; i++)
+                providersMenu.DropDownItems[i].Enabled = !settings.ProviderEnabled(i) || enabledCount > 1;
+        };
         menu.Items.Add(providersMenu);
         var startup = new ToolStripMenuItem("Start with Windows") { Checked = StartupEnabled(), CheckOnClick = true };
         startup.CheckedChanged += (_, _) =>
         {
             try { SetStartup(startup.Checked); }
-            catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+            catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException or IOException or COMException)
             { tray.ShowBalloonTip(4000, "Usage", "Could not change startup settings.", ToolTipIcon.Error); }
         };
         menu.Items.Add(startup);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Exit", null, (_, _) => Close());
+        menu.Items.Add("Exit", null, (_, _) => { exiting = true; Close(); });
         ContextMenuStrip = menu;
         using (var stream = typeof(UsageWidget).Assembly.GetManifestResourceStream("Usage.assets.usage.ico")!)
         using (var source = new Icon(stream)) Icon = (Icon)source.Clone();
@@ -96,7 +112,7 @@ sealed class UsageWidget : Form
         tray.Text = "Usage \u00b7 Codex, Gemini and Claude";
         tray.ContextMenuStrip = menu;
         tray.Visible = true;
-        tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ToggleWidget(); };
+        tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) RecoverVisibility(); };
 
         string[] names = ["Codex", "Gemini", "Claude"];
         for (int i = 0; i < 3; i++)
@@ -135,15 +151,18 @@ sealed class UsageWidget : Form
         };
         hoverTimer.Start();
         timer.Tick += async (_, _) => await RefreshUsage();
+        visibilityTimer.Tick += (_, _) => RecoverVisibility();
         Shown += async (_, _) =>
         {
             var area = Screen.PrimaryScreen!.WorkingArea;
             Location = settings.X is int x && settings.Y is int y ? new Point(x, y) : new Point(area.Right - Width - 24, area.Bottom - Height - 24);
             Location = ConstrainPosition(Bounds);
             ApplyWindowMode();
+            ready = true;
+            visibilityTimer.Start();
+            RecoverVisibility();
             timer.Start();
             await RefreshUsage();
-            if (!Enumerable.Range(0, 3).Any(settings.ProviderEnabled)) Hide();
             if (Environment.GetCommandLineArgs().Contains("--check-widget"))
             {
                 Directory.CreateDirectory("artifacts");
@@ -238,8 +257,31 @@ sealed class UsageWidget : Form
                     var corrected = ConstrainPosition(proposed);
                     return Screen.FromRectangle(proposed).WorkingArea.Contains(new Rectangle(corrected, Size));
                 });
+                settings.AlwaysOnTop = true;
+                ApplyWindowMode();
+                Hide();
+                await Task.Delay(1500);
+                bool hiddenRecovered = Visible && IsWindowVisible(Handle);
+                WindowState = FormWindowState.Minimized;
+                await Task.Delay(1500);
+                bool minimizedRecovered = WindowState == FormWindowState.Normal && !IsIconic(Handle);
+                SetWindowPos(Handle, new IntPtr(-2), 0, 0, 0, 0, 0x13);
+                await Task.Delay(1500);
+                bool topmostRecovered = (GetWindowLongPtr(Handle, -20).ToInt64() & 8) != 0;
+                Location = new Point(-100000, -100000);
+                RecoverVisibility();
+                bool offscreenRecovered = Screen.AllScreens.Any(screen => screen.WorkingArea.IntersectsWith(VisibleBounds(Location)));
+                SendMessage(Handle, TaskbarCreated, IntPtr.Zero, IntPtr.Zero);
+                RecoverVisibility();
+                bool shellRecovered = Visible && (GetWindowLongPtr(Handle, -20).ToInt64() & 8) != 0;
+                settings.AlwaysOnTop = originalMode;
+                Location = originalPosition;
+                ApplyWindowMode();
+                if (!hiddenRecovered || !minimizedRecovered || !topmostRecovered || !offscreenRecovered || !shellRecovered)
+                    throw new Exception("Widget visibility recovery failed.");
                 File.WriteAllText("artifacts/widget-check.json", System.Text.Json.JsonSerializer.Serialize(new
                 {
+                    hiddenRecovered, minimizedRecovered, topmostRecovered, offscreenRecovered, shellRecovered,
                     pinTooltipBoundsPassed = Screen.AllScreens.All(screen =>
                     {
                         var area = screen.WorkingArea;
@@ -268,6 +310,7 @@ sealed class UsageWidget : Form
                     workAreaPassed, pinPassed, sizeChecks, providerChecks, selectedSize = settings.Size, topModePassed, desktopModePassed, desktopAttached = desktop.IsAttached(this), topMost = TopMost, showInTaskbar = ShowInTaskbar,
                     logos = logos.Count, position = PointToScreen(Point.Empty), roundedCorners = Region != null && !Region.IsVisible(0, 0) && Region.IsVisible(Width / 2, Height / 2)
                 }));
+                exiting = true;
                 Close();
             }
         };
@@ -391,11 +434,25 @@ sealed class UsageWidget : Form
         if (!settings.AlwaysOnTop && IsHandleCreated) desktop.Lower(this);
     }
 
-    void ToggleWidget()
+    void RecoverVisibility()
     {
-        if (!Enumerable.Range(0, 3).Any(settings.ProviderEnabled)) return;
-        if (Visible) Hide();
-        else { Show(); ApplyWindowMode(); }
+        if (!ready || exiting || recovering || IsDisposed || Disposing || moving) return;
+        recovering = true;
+        try
+        {
+            if (WindowState != FormWindowState.Normal) WindowState = FormWindowState.Normal;
+            if (!Visible) Show();
+            if (!IsWindowVisible(Handle) || IsIconic(Handle)) ShowWindow(Handle, 4); // SW_SHOWNOACTIVATE
+            KeepOnDesktop();
+            if (settings.AlwaysOnTop)
+            {
+                desktop.Detach(this);
+                TopMost = true;
+                SetWindowPos(Handle, new IntPtr(-1), 0, 0, 0, 0, 0x13); // TOPMOST, no activation/move/resize
+            }
+            else if (!desktop.IsAttached(this)) ApplyWindowMode();
+        }
+        finally { recovering = false; }
     }
 
     void AttachDrag(Control control)
@@ -452,9 +509,13 @@ sealed class UsageWidget : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         lifetime.Cancel(); timer.Stop(); timer.Dispose(); tips.Dispose(); claude.Dispose();
+        visibilityTimer.Stop(); visibilityTimer.Dispose();
         hoverTimer.Stop(); hoverTimer.Dispose();
         tray.Visible = false; tray.Dispose();
-        Icon?.Dispose();
+        var icon = Icon;
+        Icon = null;
+        icon?.Dispose();
+        foreach (var picture in pictures) picture.Image = null;
         foreach (var logo in logos) logo.Dispose();
         ContextMenuStrip?.Dispose();
         base.OnFormClosed(e);
@@ -467,6 +528,12 @@ sealed class UsageWidget : Form
     }
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        if (!exiting && e.CloseReason == CloseReason.UserClosing)
+        {
+            e.Cancel = true;
+            return;
+        }
+        exiting = true;
         SavePosition();
         base.OnFormClosing(e);
     }
@@ -527,7 +594,19 @@ sealed class UsageWidget : Form
             return;
         }
         base.WndProc(ref m);
+        if (ready && (m.Msg == TaskbarCreated || m.Msg == RestoreMessage || m.Msg is 0x007E or 0x001A or 0x0218))
+        {
+            if (m.Msg == TaskbarCreated) { tray.Visible = false; tray.Visible = true; }
+            BeginInvoke((Action)(() => { if (exiting || IsDisposed) return; ApplyWindowMode(); RecoverVisibility(); }));
+        }
     }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int RegisterWindowMessage(string message);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr window);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr window, int command);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr window, int index);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
 
     [DllImport("user32.dll")] static extern bool ReleaseCapture();
     [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);

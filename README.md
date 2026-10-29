@@ -12,7 +12,7 @@ A native Windows widget showing your remaining Codex, Gemini and Claude usage.
 
 ## Install
 
-1. Download HowsMyUsage-1.2.2-Setup.exe and open it.
+1. Download HowsMyUsage-1.2.3-Setup.exe and open it.
 2. Choose the folder and shortcut options, then click **Install**.
 3. Click **Open HowsMyUsage**.
 
@@ -28,7 +28,7 @@ The app and uninstaller are added to the Start menu. A Desktop shortcut and auto
 - Drag to move; click the hover pin to lock the position.
 - Hover a provider for limits, reset times and the last check.
 - Right-click the widget or tray icon to choose providers, size, startup or **Always on top**.
-- Left-click the tray icon to show or hide the widget.
+- The widget stays visible; left-clicking the tray icon restores its position and visibility.
 
 Percentages show remaining usage and refresh every two minutes.
 

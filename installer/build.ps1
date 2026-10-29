@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$Payload, [Parameter(Mandatory)][string]$Output, [string]$Version = '1.2.2')
+param([Parameter(Mandatory)][string]$Payload, [Parameter(Mandatory)][string]$Output, [string]$Version = '1.2.3')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot
 $scratch = Join-Path $root ('.build/setup-' + [Guid]::NewGuid().ToString('N'))

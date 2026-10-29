@@ -10,6 +10,7 @@
 #include <vector>
 #include <string>
 #include "ShellShortcuts.h"
+#include "StartupIntegration.h"
 
 namespace fs = std::filesystem;
 
@@ -91,6 +92,8 @@ public:
                 fs::remove_all(temp);
             }
         }
+        if (_wcsicmp(RegistryValue(L"Software\\HowsMyUsage", L"InstallDir").c_str(), root.c_str()) == 0)
+            StartupIntegration::Configure(root, false);
         auto programs = ShellShortcuts::Folder(FOLDERID_Programs) / L"HowsMyUsage";
         ShellShortcuts::RemoveIfTargets(programs / L"HowsMyUsage.lnk", root / L"Usage.exe");
         ShellShortcuts::RemoveIfTargets(programs / L"Uninstall HowsMyUsage.lnk", executable);

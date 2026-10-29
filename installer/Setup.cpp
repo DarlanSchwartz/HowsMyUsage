@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cwctype>
 #include "ShellShortcuts.h"
+#include "StartupIntegration.h"
 using std::min;
 using std::max;
 #include <gdiplus.h>
@@ -113,18 +114,7 @@ public:
         Register(uninstall, L"DisplayIcon", folder + L"\\Usage.exe,0");
         Register(uninstall, L"UninstallString", L"\"" + folder + L"\\Uninstall.exe\"");
         Register(uninstall, L"QuietUninstallString", L"\"" + folder + L"\\Uninstall.exe\" /S");
-        const wchar_t* run = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-        if (startup) {
-            Register(run, L"UsageWidget", L"\"" + folder + L"\\Usage.exe\" --startup");
-            RegDeleteKeyValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run", L"UsageWidget");
-        }
-        if (!startup) {
-            wchar_t existing[4096]; DWORD length = sizeof(existing);
-            if (RegGetValueW(HKEY_CURRENT_USER, run, L"UsageWidget", RRF_RT_REG_SZ, nullptr, existing, &length) == ERROR_SUCCESS &&
-                (std::wstring(existing).find(folder + L"\\startup.ps1") != std::wstring::npos ||
-                 std::wstring(existing) == L"\"" + folder + L"\\Usage.exe\" --startup"))
-                RegDeleteKeyValueW(HKEY_CURRENT_USER, run, L"UsageWidget");
-        }
+        StartupIntegration::Configure(destination, startup);
         auto programs = ShellShortcuts::Folder(FOLDERID_Programs) / L"HowsMyUsage";
         fs::create_directories(programs);
         ShellShortcuts::Write(programs / L"HowsMyUsage.lnk", destination / L"Usage.exe");
@@ -292,6 +282,9 @@ class SetupWindow {
             SendMessageW(shortcut, BM_SETCHECK, BST_CHECKED, 0);
             wchar_t existing[4096]; DWORD bytes = sizeof(existing);
             bool enabled = RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", L"UsageWidget", RRF_RT_REG_SZ, nullptr, existing, &bytes) == ERROR_SUCCESS;
+            DWORD preference = 0, preferenceSize = sizeof(preference);
+            if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\HowsMyUsage", L"StartWithWindows", RRF_RT_REG_DWORD, nullptr, &preference, &preferenceSize) == ERROR_SUCCESS)
+                enabled = preference != 0;
             SendMessageW(startup, BM_SETCHECK, enabled ? BST_CHECKED : BST_UNCHECKED, 0);
             action = Control(L"BUTTON", L"Install", BS_OWNERDRAW, 3, 270, 313, 365, 44);
             BOOL dark = TRUE; DwmSetWindowAttribute(window, 20, &dark, sizeof(dark));
