@@ -238,10 +238,10 @@ sealed class UsageWidget : Form
                 int originalDpi = DeviceDpi;
                 settings.AlwaysOnTop = true;
                 ApplyWindowMode();
-                bool topModePassed = TopMost && !desktop.IsAttached(this) && !ShowInTaskbar && PointToScreen(Point.Empty) == originalPosition;
+                bool topModePassed = TopMost && !desktop.IsAttached(this) && TaskbarExcluded() && PointToScreen(Point.Empty) == originalPosition;
                 settings.AlwaysOnTop = false;
                 ApplyWindowMode();
-                bool desktopModePassed = !TopMost && desktop.IsAttached(this) &&
+                bool desktopModePassed = !TopMost && desktop.IsAttached(this) && TaskbarExcluded() &&
                     PointToScreen(Point.Empty) == originalPosition && DeviceDpi == originalDpi;
                 using (var desktopPreview = new Bitmap(ClientSize.Width, ClientSize.Height))
                 {
@@ -277,11 +277,12 @@ sealed class UsageWidget : Form
                 settings.AlwaysOnTop = originalMode;
                 Location = originalPosition;
                 ApplyWindowMode();
-                if (!hiddenRecovered || !minimizedRecovered || !topmostRecovered || !offscreenRecovered || !shellRecovered)
+                bool taskbarExcluded = TaskbarExcluded();
+                if (!hiddenRecovered || !minimizedRecovered || !topmostRecovered || !offscreenRecovered || !shellRecovered || !taskbarExcluded)
                     throw new Exception("Widget visibility recovery failed.");
                 File.WriteAllText("artifacts/widget-check.json", System.Text.Json.JsonSerializer.Serialize(new
                 {
-                    hiddenRecovered, minimizedRecovered, topmostRecovered, offscreenRecovered, shellRecovered,
+                    hiddenRecovered, minimizedRecovered, topmostRecovered, offscreenRecovered, shellRecovered, taskbarExcluded,
                     pinTooltipBoundsPassed = Screen.AllScreens.All(screen =>
                     {
                         var area = screen.WorkingArea;
@@ -538,6 +539,22 @@ sealed class UsageWidget : Form
         base.OnFormClosing(e);
     }
     protected override bool ShowWithoutActivation => true;
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var parameters = base.CreateParams;
+            // Stay excluded from the taskbar even without WinForms' hidden owner.
+            parameters.ExStyle = (parameters.ExStyle | 0x80) & ~0x40000; // TOOLWINDOW, no APPWINDOW
+            return parameters;
+        }
+    }
+
+    bool TaskbarExcluded()
+    {
+        long style = GetWindowLongPtr(Handle, -20).ToInt64();
+        return !ShowInTaskbar && (style & 0x80) != 0 && (style & 0x40000) == 0;
+    }
     Rectangle VisibleBounds(Point position) => new(position.X, position.Y + (int)(18 * DeviceDpi / 96f),
         Width - (int)(10 * DeviceDpi / 96f), Height - (int)(18 * DeviceDpi / 96f));
 
